@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, User, Phone, School, Copy, Check, FileX, CalendarDays, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
-import { getStudents, getRequests, getStudentAttendanceHistory } from '../services/storage';
+import { getStudentByCivilId, getRequestsByStudentId, getStudentAttendanceHistory } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus, AttendanceStatus } from '../types';
 
 const Inquiry: React.FC = () => {
@@ -25,17 +25,18 @@ const Inquiry: React.FC = () => {
     setAttendanceHistory([]);
 
     try {
-      const allStudents = await getStudents();
-      const found = allStudents.find(s => s.studentId === searchId);
+      // 1. Get Student Directly (Fast Query)
+      const foundStudent = await getStudentByCivilId(searchId);
       
-      if (found) {
-        setStudent(found);
-        const allRequests = await getRequests();
-        const studentRequests = allRequests.filter(r => r.studentId === searchId);
+      if (foundStudent) {
+        setStudent(foundStudent);
+        
+        // 2. Get Requests Directly (Fast Query)
+        const studentRequests = await getRequestsByStudentId(foundStudent.studentId);
         setHistory(studentRequests);
         
-        // Fetch attendance history recorded by staff
-        const attHist = await getStudentAttendanceHistory(found.studentId);
+        // 3. Get Attendance History (Optimized by Class)
+        const attHist = await getStudentAttendanceHistory(foundStudent.studentId, foundStudent.grade, foundStudent.className);
         setAttendanceHistory(attHist);
       }
     } catch (error) {
@@ -88,7 +89,7 @@ const Inquiry: React.FC = () => {
           <button 
             type="submit"
             disabled={loading}
-            className="bg-blue-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-800 transition-colors shadow-md disabled:bg-slate-400"
+            className="bg-blue-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-800 transition-colors shadow-md disabled:bg-slate-400 min-w-[100px] flex justify-center"
           >
             {loading ? <Loader2 className="animate-spin" size={20} /> : 'بحث'}
           </button>
@@ -98,7 +99,7 @@ const Inquiry: React.FC = () => {
 
       {/* Results */}
       {searched && !student && !loading && (
-        <div className="text-center py-16 text-slate-500 bg-white rounded-2xl border border-dashed border-slate-300 max-w-2xl mx-auto">
+        <div className="text-center py-16 text-slate-500 bg-white rounded-2xl border border-dashed border-slate-300 max-w-2xl mx-auto animate-fade-in">
           <FileX className="mx-auto mb-4 text-slate-300" size={64} />
           <p className="text-lg font-medium">عفواً، لم يتم العثور على طالب بهذا الرقم.</p>
           <p className="text-sm">يرجى التأكد من صحة الرقم المدني وإعادة المحاولة.</p>
@@ -140,6 +141,22 @@ const Inquiry: React.FC = () => {
                   <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg">
                     <span className="text-slate-400 text-xs flex items-center gap-1"><Phone size={14}/> الجوال</span>
                     <span className="font-bold text-slate-800 text-sm dir-ltr">{student.phone}</span>
+                  </div>
+                  
+                  {/* Summary Card */}
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="bg-red-50 p-2 rounded-lg border border-red-100">
+                        <span className="block text-xl font-bold text-red-600">
+                           {attendanceHistory.filter(r => r.status === AttendanceStatus.ABSENT).length}
+                        </span>
+                        <span className="text-[10px] text-red-500">غياب</span>
+                    </div>
+                    <div className="bg-amber-50 p-2 rounded-lg border border-amber-100">
+                        <span className="block text-xl font-bold text-amber-600">
+                           {attendanceHistory.filter(r => r.status === AttendanceStatus.LATE).length}
+                        </span>
+                        <span className="text-[10px] text-amber-500">تأخر</span>
+                    </div>
                   </div>
                 </div>
               </div>

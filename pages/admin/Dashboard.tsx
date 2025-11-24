@@ -512,7 +512,7 @@ const Dashboard: React.FC = () => {
                   <h3 className="font-bold text-slate-800 text-lg">الأسباب الأكثر شيوعاً</h3>
               </div>
               <div className="flex-1 grid grid-cols-2 gap-4 mb-4">
-                  {Object.entries(stats.reasonCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([reason, count], index) => (
+                  {Object.entries(stats.reasonCounts).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 4).map(([reason, count], index) => (
                     <div key={reason} className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center">
                       <span className="font-bold text-slate-700 text-sm mb-1">{reason}</span>
                       <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold">{count} طلب</span>

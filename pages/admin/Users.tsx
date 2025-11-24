@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, UserCheck, Lock, School, X, CheckSquare, Square, Loader2 } from 'lucide-react';
-import { getStaffUsers, addStaffUser, deleteStaffUser } from '../../services/storage';
-import { StaffUser, ClassAssignment } from '../../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Search, UserCheck, Lock, School, X, CheckSquare, Square, Loader2, AlertTriangle } from 'lucide-react';
+import { getStaffUsers, addStaffUser, deleteStaffUser, getStudents } from '../../services/storage';
+import { StaffUser, ClassAssignment, Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 
 const Users: React.FC = () => {
   const [users, setUsers] = useState<StaffUser[]>([]);
+  const [students, setStudents] = useState<Student[]>([]); // To filter available classes
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,11 +21,12 @@ const Users: React.FC = () => {
   const [selectedClassesForGrade, setSelectedClassesForGrade] = useState<string[]>([]);
   const [assignments, setAssignments] = useState<ClassAssignment[]>([]);
 
-  const fetchUsers = async () => {
+  const fetchUsersAndStudents = async () => {
     setLoading(true);
     try {
-      const data = await getStaffUsers();
-      setUsers(data);
+      const [usersData, studentsData] = await Promise.all([getStaffUsers(), getStudents()]);
+      setUsers(usersData);
+      setStudents(studentsData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -33,8 +35,19 @@ const Users: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsersAndStudents();
   }, []);
+
+  // Compute available classes dynamically based on students
+  const availableClasses = useMemo(() => {
+    if (!selectedGrade) return [];
+    // Get all unique classes for this grade from student list
+    const classesInGrade = new Set(
+      students.filter(s => s.grade === selectedGrade).map(s => s.className)
+    );
+    // Sort them
+    return Array.from(classesInGrade).sort();
+  }, [selectedGrade, students]);
 
   const handleToggleClass = (className: string) => {
     if (selectedClassesForGrade.includes(className)) {
@@ -96,7 +109,10 @@ const Users: React.FC = () => {
       };
 
       await addStaffUser(newUser);
-      await fetchUsers();
+      // Refresh user list
+      const updatedUsers = await getStaffUsers(true);
+      setUsers(updatedUsers);
+
       setShowAddModal(false);
       
       // Reset form
@@ -112,7 +128,8 @@ const Users: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
       await deleteStaffUser(id);
-      await fetchUsers();
+      const updatedUsers = await getStaffUsers(true);
+      setUsers(updatedUsers);
     }
   };
 
@@ -254,27 +271,35 @@ const Users: React.FC = () => {
                        {selectedGrade && (
                          <div className="animate-fade-in">
                             <label className={labelClasses}>2. حدد الفصول (الشعب)</label>
-                            <div className="flex flex-wrap gap-3 mt-2">
-                               {CLASSES.map(cls => {
-                                  const isSelected = selectedClassesForGrade.includes(cls);
-                                  return (
-                                     <button
-                                        key={cls}
-                                        type="button"
-                                        onClick={() => handleToggleClass(cls)}
-                                        className={`
-                                           flex items-center gap-2 px-4 py-2 rounded-lg border transition-all
-                                           ${isSelected 
-                                              ? 'bg-blue-900 text-white border-blue-900 shadow-md' 
-                                              : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}
-                                        `}
-                                     >
-                                        {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                                        <span className="font-bold">{cls}</span>
-                                     </button>
-                                  );
-                               })}
-                            </div>
+                            {availableClasses.length > 0 ? (
+                                <div className="flex flex-wrap gap-3 mt-2">
+                                {availableClasses.map(cls => {
+                                    const isSelected = selectedClassesForGrade.includes(cls);
+                                    return (
+                                        <button
+                                            key={cls}
+                                            type="button"
+                                            onClick={() => handleToggleClass(cls)}
+                                            className={`
+                                            flex items-center gap-2 px-4 py-2 rounded-lg border transition-all
+                                            ${isSelected 
+                                                ? 'bg-blue-900 text-white border-blue-900 shadow-md' 
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}
+                                            `}
+                                        >
+                                            {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                                            <span className="font-bold">{cls}</span>
+                                        </button>
+                                    );
+                                })}
+                                </div>
+                            ) : (
+                                <div className="text-amber-600 text-sm bg-amber-50 p-2 rounded-lg mt-2 border border-amber-100 flex items-center gap-2">
+                                    <AlertTriangle size={16} />
+                                    <span>لا يوجد طلاب مسجلين في هذا الصف حتى الآن.</span>
+                                </div>
+                            )}
+
                             <div className="mt-4 text-left">
                                <button 
                                  type="button"

@@ -27,6 +27,8 @@ const Submission: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      // getStudents handles caching automatically. 
+      // This will be instant if students were loaded previously.
       const data = await getStudents();
       setStudents(data);
       setDataLoading(false);

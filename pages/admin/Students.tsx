@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, UploadCloud, AlertTriangle, Loader2, FileSpreadsheet } from 'lucide-react';
-import { getStudents, syncStudentsBatch } from '../../services/storage';
+import { Plus, Trash2, Search, UploadCloud, AlertTriangle, Loader2, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { getStudents, syncStudentsBatch, invalidateCache } from '../../services/storage';
 import { Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 
@@ -21,10 +21,10 @@ const Students: React.FC = () => {
   const [newClass, setNewClass] = useState(CLASSES[0]);
   const [newPhone, setNewPhone] = useState('');
 
-  const fetchStudents = async () => {
+  const fetchStudents = async (force = false) => {
     setLoading(true);
     try {
-        const data = await getStudents();
+        const data = await getStudents(force);
         setStudents(data);
     } catch (e) {
         console.error("Error fetching students:", e);
@@ -36,6 +36,11 @@ const Students: React.FC = () => {
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  const handleRefresh = () => {
+    invalidateCache('students');
+    fetchStudents(true);
+  };
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +59,8 @@ const Students: React.FC = () => {
     };
 
     await syncStudentsBatch([newStudent], [], []);
-    await fetchStudents();
+    // syncStudentsBatch automatically invalidates cache
+    await fetchStudents(true); 
     setShowAddModal(false);
     setNewName(''); setNewId(''); setNewPhone('');
   };
@@ -62,7 +68,7 @@ const Students: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
       await syncStudentsBatch([], [], [id]);
-      fetchStudents();
+      fetchStudents(true);
     }
   };
 
@@ -87,74 +93,75 @@ const Students: React.FC = () => {
     setProcessingFile(true);
     
     try {
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            const bstr = evt.target?.result;
-            const wb = XLSX.read(bstr, { type: 'binary' });
-            const wsname = wb.SheetNames[0];
-            const ws = wb.Sheets[wsname];
-            // Read as array of arrays to handle headers manually if needed, or JSON
-            const data = XLSX.utils.sheet_to_json(ws);
-            
-            // Process Data
-            const toAdd: Student[] = [];
-            const toUpdate: Student[] = [];
-            const currentStudentsMap = new Map<string, Student>(students.map(s => [s.studentId, s]));
+        // Read file as ArrayBuffer first
+        const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+             const reader = new FileReader();
+             reader.onload = (evt) => {
+                 if (evt.target?.result) resolve(evt.target.result as ArrayBuffer);
+                 else reject(new Error("Empty file"));
+             };
+             reader.onerror = (err) => reject(err);
+             reader.readAsArrayBuffer(file);
+        });
 
-            data.forEach((row: any) => {
-                // Expected Columns: "الاسم", "السجل المدني" (or similar), "الصف", "الفصل", "الجوال"
-                // Let's try to be flexible with keys
-                const name = row['الاسم'] || row['name'] || row['Name'];
-                const studentIdRaw = row['السجل المدني'] || row['الهوية'] || row['studentId'] || row['ID'];
-                const gradeRaw = row['الصف'] || row['grade'] || row['Grade'];
-                const classRaw = row['الفصل'] || row['className'] || row['Class'];
-                const phone = row['الجوال'] || row['رقم الجوال'] || row['phone'] || row['Phone'] || '';
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        const toAdd: Student[] = [];
+        const toUpdate: Student[] = [];
+        const currentStudentsMap = new Map<string, Student>(students.map(s => [s.studentId, s]));
 
-                if (name && studentIdRaw) {
-                    const studentId = studentIdRaw.toString().trim();
-                    const grade = mapCodeToGrade(gradeRaw) || GRADES[0]; // Fallback if mapping fails
-                    const className = classRaw ? classRaw.toString().trim() : CLASSES[0];
+        data.forEach((row: any) => {
+            const name = row['الاسم'] || row['name'] || row['Name'];
+            const studentIdRaw = row['السجل المدني'] || row['الهوية'] || row['studentId'] || row['ID'];
+            const gradeRaw = row['الصف'] || row['grade'] || row['Grade'];
+            const classRaw = row['الفصل'] || row['className'] || row['Class'];
+            const phone = row['الجوال'] || row['رقم الجوال'] || row['phone'] || row['Phone'] || '';
 
-                    const studentObj: Student = {
-                        id: '', // Placeholder
-                        name: name.toString().trim(),
-                        studentId: studentId,
-                        grade: grade,
-                        className: className,
-                        phone: phone.toString().trim()
-                    };
+            if (name && studentIdRaw) {
+                const studentId = studentIdRaw.toString().trim();
+                const grade = mapCodeToGrade(gradeRaw) || GRADES[0]; 
+                const className = classRaw ? classRaw.toString().trim() : CLASSES[0];
 
-                    if (currentStudentsMap.has(studentId)) {
-                        // Update existing
-                        const existing = currentStudentsMap.get(studentId)!;
-                        toUpdate.push({ ...studentObj, id: existing.id });
-                    } else {
-                        // Add new
-                        toAdd.push(studentObj);
-                    }
+                const studentObj: Student = {
+                    id: '', 
+                    name: name.toString().trim(),
+                    studentId: studentId,
+                    grade: grade,
+                    className: className,
+                    phone: phone.toString().trim()
+                };
+
+                if (currentStudentsMap.has(studentId)) {
+                    const existing = currentStudentsMap.get(studentId)!;
+                    toUpdate.push({ ...studentObj, id: existing.id });
+                } else {
+                    toAdd.push(studentObj);
                 }
-            });
-
-            if (toAdd.length === 0 && toUpdate.length === 0) {
-                alert("لم يتم العثور على بيانات صالحة في الملف. تأكد من أسماء الأعمدة (الاسم، السجل المدني، الصف، الفصل).");
-                setProcessingFile(false);
-                return;
             }
+        });
 
-            const confirmMsg = `تم تحليل الملف:\n➕ إضافة طلاب جدد: ${toAdd.length}\n🔄 تحديث بيانات: ${toUpdate.length}\n\nهل تريد تنفيذ العملية؟`;
-            if (window.confirm(confirmMsg)) {
-                await syncStudentsBatch(toAdd, toUpdate, []); // Pass empty array for delete
-                await fetchStudents();
-                alert("تم رفع البيانات بنجاح!");
-            }
-            setProcessingFile(false);
-            e.target.value = ''; // Reset input
-        };
-        reader.readAsBinaryString(file);
+        if (toAdd.length === 0 && toUpdate.length === 0) {
+            alert("لم يتم العثور على بيانات صالحة في الملف. تأكد من أسماء الأعمدة (الاسم، السجل المدني، الصف، الفصل).");
+            return;
+        }
+
+        const confirmMsg = `تم تحليل الملف:\n➕ إضافة طلاب جدد: ${toAdd.length}\n🔄 تحديث بيانات: ${toUpdate.length}\n\nهل تريد تنفيذ العملية؟`;
+        if (window.confirm(confirmMsg)) {
+            // This function handles batching internally (chunking by 400)
+            await syncStudentsBatch(toAdd, toUpdate, []); 
+            await fetchStudents(true);
+            alert("تم رفع البيانات بنجاح!");
+        }
+
     } catch (error) {
         console.error(error);
-        alert("حدث خطأ أثناء قراءة الملف.");
+        alert("حدث خطأ أثناء قراءة أو معالجة الملف. تأكد من صيغة الملف.");
+    } finally {
         setProcessingFile(false);
+        e.target.value = ''; // Reset input to allow selecting same file again
     }
   };
 
@@ -166,13 +173,20 @@ const Students: React.FC = () => {
   const labelClasses = "block text-sm font-semibold text-slate-700 mb-1.5";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
             <h1 className="text-2xl font-bold text-blue-900">إدارة الطلاب</h1>
             <p className="text-slate-500 text-sm mt-1">رفع وإدارة بيانات الطلاب</p>
         </div>
         <div className="flex gap-2">
+           <button 
+             onClick={handleRefresh}
+             className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+             title="تحديث البيانات من السيرفر"
+           >
+             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+           </button>
            <button 
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors font-medium shadow-sm hover:shadow"
@@ -214,10 +228,10 @@ const Students: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
+        {loading && students.length === 0 ? (
             <div className="p-12 text-center text-slate-500">
                 <Loader2 className="animate-spin mx-auto mb-2" size={32} />
-                <p>جاري تحميل بيانات الطلاب من السحابة...</p>
+                <p>جاري تحميل بيانات الطلاب...</p>
             </div>
         ) : (
         <div className="overflow-x-auto">

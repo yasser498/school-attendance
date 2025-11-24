@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# نظام إدارة الغياب المدرسي (متوسطة عماد الدين زنكي)
 
-# Run and deploy your AI Studio app
+نظام سحابي متكامل لإدارة حضور وغياب الطلاب، تقديم الأعذار، والتحليل الذكي باستخدام AI.
 
-This contains everything you need to run your app locally.
+## المميزات
+- **لوحة تحكم للإدارة:** إحصائيات، تقارير، وقبول/رفض الطلبات.
+- **بوابة المعلمين:** رصد الغياب والتأخر بضغطة زر.
+- **بوابة أولياء الأمور:** الاستعلام عن الحالة وتقديم الأعذار.
+- **الذكاء الاصطناعي:** تحليل البيانات وكتابة الردود وتوليد التقارير الاستراتيجية.
+- **قاعدة بيانات سحابية:** Firebase Firestore (تزامن لحظي).
 
-View your app in AI Studio: https://ai.studio/apps/drive/1_FxmpBrgBXaGhiIydFVJAqkzMPU4It_g
+## طريقة التشغيل (الحصول على رابط)
 
-## Run Locally
+### الخيار الأفضل: النشر عبر Vercel (مجاني)
+1. قم برفع ملفات المشروع على حسابك في **GitHub**.
+2. اذهب إلى [Vercel](https://vercel.com) وسجل الدخول.
+3. اضغط **Add New Project** واختر المستودع الذي رفعته.
+4. اضغط **Deploy**.
+5. مبروك! ستحصل على رابط دائم (مثال: `https://your-school-app.vercel.app`).
 
-**Prerequisites:**  Node.js
+### التشغيل المحلي (للمطورين)
+1. حمل الملفات.
+2. افتح التيرمينال واكتب:
+   ```bash
+   npm install
+   npm run dev
+   ```
+3. افتح الرابط الذي يظهر لك في المتصفح.
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## ملاحظات هامة
+- تأكد من أن مفاتيح Firebase في ملف `firebaseConfig.ts` صحيحة.
+- هذا النظام يستخدم Google Gemini API للذكاء الاصطناعي، تأكد من إضافة المفتاح في بيئة العمل إذا لزم الأمر.

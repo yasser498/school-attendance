@@ -9,6 +9,7 @@ const Users: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [saving, setSaving] = useState(false);
   
   // New User Form State
   const [name, setName] = useState('');
@@ -58,7 +59,6 @@ const Users: React.FC = () => {
 
     setAssignments([...assignments, ...uniqueAssignments]);
     setSelectedClassesForGrade([]); // Reset checkboxes
-    // Keep grade selected for convenience or reset? Let's keep it.
   };
 
   const removeAssignment = (index: number) => {
@@ -80,19 +80,33 @@ const Users: React.FC = () => {
       return;
     }
 
-    const newUser: StaffUser = {
-      id: '', // Will be generated
-      name,
-      passcode,
-      assignments: assignments,
-    };
+    setSaving(true);
+    try {
+      // Ensure plain objects
+      const cleanAssignments = assignments.map(a => ({
+        grade: a.grade,
+        className: a.className
+      }));
 
-    await addStaffUser(newUser);
-    await fetchUsers();
-    setShowAddModal(false);
-    
-    // Reset form
-    setName(''); setPasscode(''); setAssignments([]); setSelectedGrade(''); setSelectedClassesForGrade([]);
+      const newUser: StaffUser = {
+        id: '', // Will be generated
+        name: name,
+        passcode: passcode,
+        assignments: cleanAssignments,
+      };
+
+      await addStaffUser(newUser);
+      await fetchUsers();
+      setShowAddModal(false);
+      
+      // Reset form
+      setName(''); setPasscode(''); setAssignments([]); setSelectedGrade(''); setSelectedClassesForGrade([]);
+    } catch (error) {
+      console.error("Error saving user:", error);
+      alert("حدث خطأ أثناء حفظ المستخدم. تأكد من اتصالك بالإنترنت وصلاحيات قاعدة البيانات.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -305,7 +319,13 @@ const Users: React.FC = () => {
                  </div>
 
                  <div className="flex gap-3 pt-4 border-t border-slate-100">
-                   <button type="submit" className="flex-1 bg-blue-900 text-white py-3 rounded-xl hover:bg-blue-800 font-bold transition-colors shadow-lg shadow-blue-900/20">حفظ المستخدم</button>
+                   <button 
+                     type="submit" 
+                     disabled={saving}
+                     className="flex-1 bg-blue-900 text-white py-3 rounded-xl hover:bg-blue-800 font-bold transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+                   >
+                     {saving ? <Loader2 className="animate-spin" /> : 'حفظ المستخدم'}
+                   </button>
                    <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-white border border-slate-300 text-slate-700 py-3 rounded-xl hover:bg-slate-50 font-bold transition-colors">إلغاء</button>
                  </div>
               </form>

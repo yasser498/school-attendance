@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, CheckCircle, Clock, XCircle, Save, Check, School, Users, AlertTriangle, ListChecks, ChevronDown, Loader2 } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, XCircle, Save, Check, School, Users, ListChecks, ChevronDown, Loader2 } from 'lucide-react';
 import { getStudents, saveAttendanceRecord } from '../../services/storage';
 import { Student, StaffUser, AttendanceStatus, AttendanceRecord, ClassAssignment } from '../../types';
 
@@ -14,7 +14,7 @@ const Attendance: React.FC = () => {
   
   const [saved, setSaved] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [saving, setSaving] = useState(false); // New Saving State
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem('ozr_staff_session');
@@ -32,7 +32,7 @@ const Attendance: React.FC = () => {
 
   }, [navigate]);
 
-  // Fetch students when assignment changes
+  // Fetch students immediately when assignment changes
   useEffect(() => {
     if (!currentUser || !currentAssignment) return;
 
@@ -114,7 +114,7 @@ const Attendance: React.FC = () => {
   if (!currentUser) return null;
 
   return (
-    <div className="space-y-8 pb-20 animate-fade-in">
+    <div className="space-y-8 pb-32 animate-fade-in relative">
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -137,7 +137,7 @@ const Attendance: React.FC = () => {
                   <select
                     value={currentAssignment ? JSON.stringify(currentAssignment) : ''}
                     onChange={(e) => setCurrentAssignment(JSON.parse(e.target.value))}
-                    className="w-full md:min-w-[250px] appearance-none bg-blue-50 border border-blue-200 text-blue-900 font-bold py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 shadow-sm"
+                    className="w-full md:min-w-[250px] appearance-none bg-blue-50 border border-blue-200 text-blue-900 font-bold py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 shadow-sm cursor-pointer"
                   >
                     {currentUser.assignments.map((assign, idx) => (
                       <option key={idx} value={JSON.stringify(assign)}>
@@ -154,30 +154,14 @@ const Attendance: React.FC = () => {
           )}
         </div>
 
-        {/* Action Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Top Actions (Bulk) */}
+        <div className="grid grid-cols-2 gap-3">
           <button onClick={() => markAll(AttendanceStatus.PRESENT)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
             <CheckCircle size={18} /> تحضير الكل
           </button>
           <button onClick={() => markAll(AttendanceStatus.ABSENT)} className="bg-red-50 hover:bg-red-100 text-red-600 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 border border-red-100">
             <XCircle size={18} /> تغييب الكل
           </button>
-          
-          <div className="md:col-span-2 flex items-center justify-end">
-            <button 
-              onClick={handleSave}
-              disabled={saving}
-              className={`w-full md:w-auto flex items-center justify-center gap-3 px-8 py-3 rounded-xl font-bold text-lg shadow-lg transition-all
-                 ${saved 
-                   ? 'bg-emerald-500 text-white shadow-emerald-500/20' 
-                   : 'bg-blue-900 text-white hover:bg-blue-800 hover:shadow-blue-900/20'}
-                 ${saving ? 'opacity-70 cursor-wait' : ''}
-              `}
-            >
-              {saving ? <Loader2 className="animate-spin" /> : saved ? <Check size={24} /> : <Save size={24} />}
-              <span>{saving ? 'جاري الحفظ...' : saved ? 'تم الحفظ بنجاح' : 'حفظ التغييرات'}</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -199,9 +183,9 @@ const Attendance: React.FC = () => {
 
       {/* Student List */}
       {loadingStudents ? (
-         <div className="py-20 text-center text-slate-400">
+         <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
              <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
-             <p>جاري تحميل قائمة الطلاب...</p>
+             <p className="font-bold">جاري جلب بيانات الطلاب...</p>
          </div>
       ) : students.length === 0 ? (
          <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
@@ -260,6 +244,26 @@ const Attendance: React.FC = () => {
             ))}
          </div>
       )}
+
+      {/* Sticky Save Bar */}
+      <div className="fixed bottom-0 left-0 right-0 md:right-auto md:left-0 md:w-[calc(100%-18rem)] md:mr-72 bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30 flex justify-between items-center">
+        <div className="hidden md:block text-slate-500 text-sm font-medium">
+           تأكد من رصد جميع الطلاب قبل الحفظ
+        </div>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className={`w-full md:w-auto flex items-center justify-center gap-3 px-10 py-3 rounded-xl font-bold text-lg shadow-lg transition-all ml-auto
+              ${saved 
+                ? 'bg-emerald-500 text-white shadow-emerald-500/20' 
+                : 'bg-blue-900 text-white hover:bg-blue-800 hover:shadow-blue-900/20'}
+              ${saving ? 'opacity-70 cursor-wait' : ''}
+          `}
+        >
+          {saving ? <Loader2 className="animate-spin" /> : saved ? <Check size={24} /> : <Save size={24} />}
+          <span>{saving ? 'جاري الحفظ...' : saved ? 'تم الحفظ' : 'حفظ الغياب'}</span>
+        </button>
+      </div>
     </div>
   );
 };

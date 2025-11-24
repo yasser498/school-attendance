@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Search, UserCheck, Lock, School, X, CheckSquare, Square, Loader2, AlertTriangle } from 'lucide-react';
-import { getStaffUsers, addStaffUser, deleteStaffUser, getStudents } from '../../services/storage';
-import { StaffUser, ClassAssignment, Student } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2 } from 'lucide-react';
+import { getStaffUsersSync, getStaffUsers, addStaffUser, deleteStaffUser } from '../../services/storage';
+import { StaffUser, ClassAssignment } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 
 const Users: React.FC = () => {
-  const [users, setUsers] = useState<StaffUser[]>([]);
-  const [students, setStudents] = useState<Student[]>([]); // To filter available classes
-  const [loading, setLoading] = useState(true);
+  // Use synchronous getter for instant load if available
+  const [users, setUsers] = useState<StaffUser[]>(() => getStaffUsersSync() || []);
+  const [loading, setLoading] = useState(() => !getStaffUsersSync());
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
@@ -21,12 +22,12 @@ const Users: React.FC = () => {
   const [selectedClassesForGrade, setSelectedClassesForGrade] = useState<string[]>([]);
   const [assignments, setAssignments] = useState<ClassAssignment[]>([]);
 
-  const fetchUsersAndStudents = async () => {
-    setLoading(true);
+  const fetchUsers = async () => {
+    // Only show loading if we didn't have cache
+    if (users.length === 0) setLoading(true);
     try {
-      const [usersData, studentsData] = await Promise.all([getStaffUsers(), getStudents()]);
+      const usersData = await getStaffUsers();
       setUsers(usersData);
-      setStudents(studentsData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -35,19 +36,8 @@ const Users: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchUsersAndStudents();
+    fetchUsers();
   }, []);
-
-  // Compute available classes dynamically based on students
-  const availableClasses = useMemo(() => {
-    if (!selectedGrade) return [];
-    // Get all unique classes for this grade from student list
-    const classesInGrade = new Set(
-      students.filter(s => s.grade === selectedGrade).map(s => s.className)
-    );
-    // Sort them
-    return Array.from(classesInGrade).sort();
-  }, [selectedGrade, students]);
 
   const handleToggleClass = (className: string) => {
     if (selectedClassesForGrade.includes(className)) {
@@ -140,7 +130,7 @@ const Users: React.FC = () => {
   const inputClasses = "w-full p-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all";
   const labelClasses = "block text-sm font-semibold text-slate-700 mb-1.5";
 
-  if (loading && users.length === 0) {
+  if (loading) {
     return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-900" size={32} /></div>;
   }
 
@@ -271,9 +261,9 @@ const Users: React.FC = () => {
                        {selectedGrade && (
                          <div className="animate-fade-in">
                             <label className={labelClasses}>2. حدد الفصول (الشعب)</label>
-                            {availableClasses.length > 0 ? (
-                                <div className="flex flex-wrap gap-3 mt-2">
-                                {availableClasses.map(cls => {
+                            {/* Static Classes Checklist */}
+                            <div className="flex flex-wrap gap-3 mt-2">
+                                {CLASSES.map(cls => {
                                     const isSelected = selectedClassesForGrade.includes(cls);
                                     return (
                                         <button
@@ -292,13 +282,7 @@ const Users: React.FC = () => {
                                         </button>
                                     );
                                 })}
-                                </div>
-                            ) : (
-                                <div className="text-amber-600 text-sm bg-amber-50 p-2 rounded-lg mt-2 border border-amber-100 flex items-center gap-2">
-                                    <AlertTriangle size={16} />
-                                    <span>لا يوجد طلاب مسجلين في هذا الصف حتى الآن.</span>
-                                </div>
-                            )}
+                            </div>
 
                             <div className="mt-4 text-left">
                                <button 

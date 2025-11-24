@@ -3,6 +3,7 @@ import { Check, X, Eye, Calendar, Filter, MessageCircle, Sparkles, Loader2, Copy
 import { getRequests, updateRequestStatus, invalidateCache } from '../../services/storage';
 import { RequestStatus, ExcuseRequest } from '../../types';
 import { GoogleGenAI } from "@google/genai";
+import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 const Requests: React.FC = () => {
   const [requests, setRequests] = useState<ExcuseRequest[]>([]);
@@ -33,17 +34,24 @@ const Requests: React.FC = () => {
   }, []);
 
   const handleRefresh = () => {
-    invalidateCache('requests');
     fetchRequests(true);
   };
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
-    await updateRequestStatus(id, newStatus);
-    await fetchRequests(true); // Force reload to get updated list/sort
+    // Optimistic Update: Update UI immediately
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+    
     if (selectedReq && selectedReq.id === id) {
       setSelectedReq(null); // Close modal
       setAiReply('');
       setReplyType(null);
+    }
+
+    try {
+        await updateRequestStatus(id, newStatus);
+    } catch (error) {
+        alert("فشل تحديث الحالة.");
+        fetchRequests(true); // Revert on failure
     }
   };
 
@@ -54,7 +62,10 @@ const Requests: React.FC = () => {
     setAiReply(''); // Clear previous
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+      if (!key) throw new Error("Missing Key");
+
+      const ai = new GoogleGenAI({ apiKey: key });
       const prompt = `
         بصفتك مدير مدرسة "متوسطة عماد الدين زنكي".
         اكتب رسالة نصية قصيرة (SMS) لولي أمر الطالب "${selectedReq.studentName}".
@@ -75,7 +86,7 @@ const Requests: React.FC = () => {
         setAiReply(response.text.trim());
       }
     } catch (error) {
-      setAiReply("حدث خطأ أثناء توليد الرد. يرجى المحاولة مرة أخرى.");
+      setAiReply("حدث خطأ أثناء توليد الرد. تأكد من وجود مفتاح API في الإعدادات.");
     } finally {
       setIsGenerating(false);
     }
@@ -104,6 +115,72 @@ const Requests: React.FC = () => {
     [RequestStatus.PENDING]: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', border: 'border-amber-200', label: 'قيد المراجعة' },
     [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-emerald-200', label: 'تم القبول' },
     [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-red-200', label: 'مرفوض' },
+  };
+
+  // --- Virtualized Row Component ---
+  const Row = ({ index, style }: ListChildComponentProps) => {
+    const req = filteredRequests[index];
+    const styleObj = statusStyles[req.status];
+    
+    return (
+      <div 
+        style={style} 
+        className="flex items-center border-b border-slate-50 hover:bg-blue-50/30 transition-colors group px-2"
+      >
+        {/* Student Column (30%) */}
+        <div className="w-[30%] p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm shrink-0">
+              {req.studentName.charAt(0)}
+            </div>
+            <div className="truncate">
+              <p className="font-bold text-slate-800 text-sm mb-0.5 truncate">{req.studentName}</p>
+              <p className="font-mono text-xs text-slate-400 tracking-wide">{req.studentId}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Class Column (15%) */}
+        <div className="w-[15%] p-4">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-slate-700">{req.grade}</span>
+            <span className="text-xs text-slate-500">فصل {req.className}</span>
+          </div>
+        </div>
+
+        {/* Reason Column (25%) */}
+        <div className="w-[25%] p-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+               <span className="font-bold text-slate-800 text-sm truncate">{req.reason}</span>
+               {req.attachmentName && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">مرفق</span>}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <Calendar size={12} />
+              <span>{req.date}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Column (20%) */}
+        <div className="w-[20%] p-4">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${styleObj.bg} ${styleObj.border}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${styleObj.dot}`}></span>
+            <span className={`text-xs font-bold ${styleObj.text}`}>{styleObj.label}</span>
+          </div>
+        </div>
+
+        {/* Action Column (10%) */}
+        <div className="w-[10%] p-4 flex justify-end">
+          <button 
+            onClick={() => setSelectedReq(req)}
+            className="p-2 text-slate-400 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-all"
+          >
+            <Eye size={20} />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -159,16 +236,22 @@ const Requests: React.FC = () => {
         </div>
       </div>
 
-      {/* Requests List */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
+      {/* Requests List (Virtualized) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
+        {/* Static Header Row */}
+        <div className="flex bg-slate-50/80 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100 pr-2 pl-4">
+           <div className="w-[30%] p-5 text-right">الطالب</div>
+           <div className="w-[15%] p-5 text-right">الصف / الفصل</div>
+           <div className="w-[25%] p-5 text-right">بيانات العذر</div>
+           <div className="w-[20%] p-5 text-right">الحالة</div>
+           <div className="w-[10%] p-5 text-left">إجراء</div>
+        </div>
+
         {loading ? (
             <div className="animate-pulse">
-                {/* Header Skeleton */}
-                <div className="bg-slate-50 border-b border-slate-100 h-12 w-full"></div>
-                {/* Row Skeletons */}
                 {[...Array(6)].map((_, i) => (
-                    <div key={i} className="flex p-5 border-b border-slate-50">
-                        <div className="w-10 h-10 bg-slate-100 rounded-full mr-4"></div>
+                    <div key={i} className="flex p-5 border-b border-slate-50 items-center">
+                        <div className="w-10 h-10 bg-slate-100 rounded-full ml-4"></div>
                         <div className="flex-1 space-y-2">
                            <div className="h-3 bg-slate-100 rounded w-1/4"></div>
                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
@@ -185,69 +268,18 @@ const Requests: React.FC = () => {
             <p className="font-medium text-lg">لا توجد طلبات في هذه القائمة</p>
           </div>
         ) : (
-          <table className="w-full text-right">
-            <thead className="bg-slate-50/80 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100">
-              <tr>
-                <th className="p-5 font-bold text-slate-600">الطالب</th>
-                <th className="p-5 font-bold text-slate-600">الصف / الفصل</th>
-                <th className="p-5 font-bold text-slate-600">بيانات العذر</th>
-                <th className="p-5 font-bold text-slate-600">الحالة</th>
-                <th className="p-5 font-bold text-slate-600 text-left">إجراء</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filteredRequests.map((req) => {
-                const style = statusStyles[req.status];
-                return (
-                  <tr key={req.id} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="p-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
-                          {req.studentName.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm mb-0.5">{req.studentName}</p>
-                          <p className="font-mono text-xs text-slate-400 tracking-wide">{req.studentId}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-5">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-slate-700">{req.grade}</span>
-                        <span className="text-xs text-slate-500">فصل {req.className}</span>
-                      </div>
-                    </td>
-                    <td className="p-5">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                           <span className="font-bold text-slate-800 text-sm">{req.reason}</span>
-                           {req.attachmentName && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">مرفق</span>}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                          <Calendar size={12} />
-                          <span>{req.date}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-5">
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${style.bg} ${style.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`}></span>
-                        <span className={`text-xs font-bold ${style.text}`}>{style.label}</span>
-                      </div>
-                    </td>
-                    <td className="p-5 text-left">
-                      <button 
-                        onClick={() => setSelectedReq(req)}
-                        className="p-2 text-slate-400 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-all"
-                      >
-                        <Eye size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div style={{ direction: 'ltr' }}> {/* Reset direction for scrollbar, handle RTL inside items */}
+            <List
+              height={500}
+              itemCount={filteredRequests.length}
+              itemSize={100}
+              width={'100%'}
+              direction="rtl"
+              className="scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
+            >
+              {Row}
+            </List>
+          </div>
         )}
       </div>
 

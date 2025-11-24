@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, PieChart } from 'lucide-react';
 
 interface LayoutProps {
@@ -15,19 +15,19 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
   const isActive = (path: string) => location.pathname === path;
 
   const navLinkClass = (path: string) => `
-    flex items-center gap-2 px-4 py-3 rounded-lg transition-colors duration-200 font-medium
+    flex items-center gap-2 px-4 py-3 rounded-lg transition-colors duration-200 font-medium shrink-0
     ${isActive(path) 
       ? 'bg-blue-50 text-blue-900 border-r-4 border-blue-900' 
       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
   `;
 
-  const SCHOOL_LOGO = "https://www.raed.net/img?id=1471924";
-  const SCHOOL_NAME = "متوسطة عماد الدين زنكي";
+  const SCHOOL_LOGO = localStorage.getItem('school_logo') || "https://www.raed.net/img?id=1471924";
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden">
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+      <div className="md:hidden bg-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm shrink-0">
         <div className="flex items-center gap-3 font-bold text-slate-800 text-lg">
           <img src={SCHOOL_LOGO} alt="Logo" className="w-10 h-10 object-contain" />
           <span className="text-blue-900">{SCHOOL_NAME}</span>
@@ -39,12 +39,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
       {/* Sidebar Navigation */}
       <aside className={`
-        fixed md:sticky top-0 h-screen w-72 bg-white border-l border-slate-200 shadow-lg z-10
-        transition-transform duration-300 ease-in-out overflow-y-auto
+        fixed md:relative top-0 h-full w-72 bg-white border-l border-slate-200 shadow-lg z-20
+        transition-transform duration-300 ease-in-out flex flex-col
         ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
         right-0
       `}>
-        <div className="p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3">
+        {/* Header Section - Fixed */}
+        <div className="p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3 shrink-0">
           <img src={SCHOOL_LOGO} alt="School Logo" className="w-24 h-24 object-contain drop-shadow-sm hover:scale-105 transition-transform" />
           <div>
             <h1 className="font-extrabold text-blue-900 text-lg leading-tight">{SCHOOL_NAME}</h1>
@@ -52,7 +53,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
           </div>
         </div>
 
-        <nav className="p-4 space-y-2">
+        {/* Scrollable Navigation Links */}
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-slate-200">
           {role === 'public' && (
             <>
               <Link to="/" className={navLinkClass('/')} onClick={() => setIsMobileMenuOpen(false)}>
@@ -67,7 +69,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
                 <Search size={20} />
                 <span>استعلام عن طالب</span>
               </Link>
-              <div className="border-t border-slate-100 my-4"></div>
+              <div className="border-t border-slate-100 my-4 shrink-0"></div>
               <Link to="/staff/login" className={navLinkClass('/staff/login')} onClick={() => setIsMobileMenuOpen(false)}>
                 <Users size={20} />
                 <span>دخول المعلمين</span>
@@ -81,7 +83,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
           {role === 'admin' && (
             <>
-              <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">لوحة التحكم</div>
+              <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">لوحة التحكم</div>
               <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')} onClick={() => setIsMobileMenuOpen(false)}>
                 <Home size={20} />
                 <span>نظرة عامة</span>
@@ -107,10 +109,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
                 <span>إدارة المستخدمين</span>
               </Link>
               
-              <div className="border-t border-slate-100 my-4"></div>
+              <div className="border-t border-slate-100 my-4 shrink-0"></div>
               <button 
                 onClick={onLogout}
-                className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium"
+                className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0"
               >
                 <LogOut size={20} />
                 <span>تسجيل خروج</span>
@@ -120,15 +122,15 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
           {role === 'staff' && (
             <>
-               <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">بوابة المعلم</div>
+               <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">بوابة المعلم</div>
                <Link to="/staff/attendance" className={navLinkClass('/staff/attendance')} onClick={() => setIsMobileMenuOpen(false)}>
                 <ClipboardCheck size={20} />
                 <span>رصد الغياب والتأخر</span>
               </Link>
-              <div className="border-t border-slate-100 my-4"></div>
+              <div className="border-t border-slate-100 my-4 shrink-0"></div>
               <button 
                 onClick={onLogout}
-                className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium"
+                className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0"
               >
                 <LogOut size={20} />
                 <span>تسجيل خروج</span>
@@ -137,16 +139,16 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
           )}
         </nav>
 
-        {/* Footer Info */}
-        <div className="absolute bottom-0 w-full p-4 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-100">
+        {/* Footer Info - Fixed at Bottom */}
+        <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-100 shrink-0">
           <p>© 2024 نظام عذر المدرسي</p>
-          <p className="text-amber-600 font-bold mt-1">متوسطة عماد الدين زنكي</p>
+          <p className="text-amber-600 font-bold mt-1">{SCHOOL_NAME}</p>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full bg-slate-50/50">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full bg-slate-50/50 relative">
+        <div className="max-w-6xl mx-auto pb-10">
           {children}
         </div>
       </main>
@@ -154,7 +156,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/40 z-0 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/40 z-10 md:hidden backdrop-blur-sm"
           onClick={() => setIsMobileMenuOpen(false)}
         ></div>
       )}

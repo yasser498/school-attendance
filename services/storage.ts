@@ -8,9 +8,8 @@ import {
   query, 
   where, 
   deleteDoc,
-  setDoc,
   writeBatch,
-  limit // Added limit for optimization
+  limit
 } from 'firebase/firestore';
 import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus } from "../types";
 
@@ -22,12 +21,12 @@ const COLL_ATTENDANCE = 'attendance';
 
 // --- Caching System ---
 const CACHE: Record<string, { data: any, timestamp: number }> = {};
-const CACHE_TTL = 5 * 60 * 1000; // 5 Minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 Minutes
 
-const getFromCache = <T>(key: string): T | null => {
+// Helper to get data synchronously (Instant Load)
+export const getFromCache = <T>(key: string): T | null => {
   const cached = CACHE[key];
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`🚀 Serving ${key} from cache`);
     return cached.data as T;
   }
   return null;
@@ -39,10 +38,11 @@ const setCache = (key: string, data: any) => {
 
 export const invalidateCache = (key: string) => {
   delete CACHE[key];
-  console.log(`🔄 Cache invalidated: ${key}`);
 };
 
 // --- Students ---
+
+export const getStudentsSync = (): Student[] | null => getFromCache<Student[]>('students');
 
 export const getStudents = async (forceRefresh = false): Promise<Student[]> => {
   if (!forceRefresh) {
@@ -61,7 +61,6 @@ export const getStudents = async (forceRefresh = false): Promise<Student[]> => {
   }
 };
 
-// Optimized Query: Get Single Student by ID (Civil ID)
 export const getStudentByCivilId = async (civilId: string): Promise<Student | null> => {
   try {
     const q = query(collection(db, COLL_STUDENTS), where("studentId", "==", civilId), limit(1));
@@ -75,14 +74,39 @@ export const getStudentByCivilId = async (civilId: string): Promise<Student | nu
   }
 };
 
+// Optimized Single Add
+export const addStudent = async (student: Student): Promise<Student> => {
+  const { id, ...data } = student;
+  const docRef = await addDoc(collection(db, COLL_STUDENTS), data);
+  const newStudent = { ...student, id: docRef.id };
+  
+  // Update Cache Optimistically
+  const cached = getFromCache<Student[]>('students');
+  if (cached) {
+    setCache('students', [...cached, newStudent]);
+  }
+  
+  return newStudent;
+};
+
+// Optimized Single Delete
+export const deleteStudent = async (id: string) => {
+  await deleteDoc(doc(db, COLL_STUDENTS, id));
+  
+  // Update Cache Optimistically
+  const cached = getFromCache<Student[]>('students');
+  if (cached) {
+    setCache('students', cached.filter(s => s.id !== id));
+  }
+};
+
+// Batch Sync (For Excel Uploads)
 export const syncStudentsBatch = async (
   toAdd: Student[], 
   toUpdate: Student[], 
   toDeleteIds: string[]
 ) => {
-  // Firestore limit is 500 operations per batch. 
-  // We use 400 to be safe and process in chunks.
-  const BATCH_SIZE = 400;
+  const BATCH_SIZE = 250;
 
   const processChunk = async (operations: any[], type: 'add' | 'update' | 'delete') => {
     for (let i = 0; i < operations.length; i += BATCH_SIZE) {
@@ -106,7 +130,6 @@ export const syncStudentsBatch = async (
       });
 
       await batch.commit();
-      console.log(`📦 Processed batch of ${chunk.length} ${type} operations`);
     }
   };
 
@@ -114,12 +137,13 @@ export const syncStudentsBatch = async (
   await processChunk(toUpdate, 'update');
   await processChunk(toDeleteIds, 'delete');
 
-  invalidateCache('students'); // Force refresh next time
+  // Invalidate cache for bulk operations as complex merging is risky
+  invalidateCache('students'); 
 };
 
 export const clearStudents = async () => {
   const snapshot = await getDocs(collection(db, COLL_STUDENTS));
-  const BATCH_SIZE = 400;
+  const BATCH_SIZE = 250;
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
@@ -129,10 +153,12 @@ export const clearStudents = async () => {
     await batch.commit();
   }
   
-  invalidateCache('students');
+  setCache('students', []);
 };
 
 // --- Requests ---
+
+export const getRequestsSync = (): ExcuseRequest[] | null => getFromCache<ExcuseRequest[]>('requests');
 
 export const getRequests = async (forceRefresh = false): Promise<ExcuseRequest[]> => {
   if (!forceRefresh) {
@@ -152,8 +178,13 @@ export const getRequests = async (forceRefresh = false): Promise<ExcuseRequest[]
   }
 };
 
-// Optimized Query: Get Requests by Student ID
 export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseRequest[]> => {
+  // Try to find in cache first for speed
+  const cached = getFromCache<ExcuseRequest[]>('requests');
+  if (cached) {
+    return cached.filter(r => r.studentId === studentId);
+  }
+  
   try {
     const q = query(collection(db, COLL_REQUESTS), where("studentId", "==", studentId));
     const snapshot = await getDocs(q);
@@ -168,19 +199,33 @@ export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseR
 export const addRequest = async (req: ExcuseRequest) => {
   const { id, ...data } = req;
   const docRef = await addDoc(collection(db, COLL_REQUESTS), data);
-  await updateDoc(docRef, { id: docRef.id });
-  invalidateCache('requests');
+  const newReq = { ...req, id: docRef.id };
+  
+  // Optimistic Cache Update
+  const cached = getFromCache<ExcuseRequest[]>('requests');
+  if (cached) {
+    setCache('requests', [newReq, ...cached]);
+  } else {
+    // If no cache, allow next fetch to populate
+    invalidateCache('requests');
+  }
 };
 
 export const updateRequestStatus = async (id: string, status: RequestStatus) => {
   const ref = doc(db, COLL_REQUESTS, id);
   await updateDoc(ref, { status });
-  invalidateCache('requests');
+  
+  // Optimistic Cache Update
+  const cached = getFromCache<ExcuseRequest[]>('requests');
+  if (cached) {
+    const updated = cached.map(r => r.id === id ? { ...r, status } : r);
+    setCache('requests', updated);
+  }
 };
 
 export const clearRequests = async () => {
   const snapshot = await getDocs(collection(db, COLL_REQUESTS));
-  const BATCH_SIZE = 400;
+  const BATCH_SIZE = 250;
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
@@ -189,10 +234,12 @@ export const clearRequests = async () => {
     chunk.forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
-  invalidateCache('requests');
+  setCache('requests', []);
 };
 
 // --- Staff Management ---
+
+export const getStaffUsersSync = (): StaffUser[] | null => getFromCache<StaffUser[]>('staff');
 
 export const getStaffUsers = async (forceRefresh = false): Promise<StaffUser[]> => {
   if (!forceRefresh) {
@@ -208,7 +255,6 @@ export const getStaffUsers = async (forceRefresh = false): Promise<StaffUser[]> 
 export const addStaffUser = async (user: StaffUser) => {
   const { id, ...data } = user;
   const docRef = await addDoc(collection(db, COLL_STAFF), data);
-  await updateDoc(docRef, { id: docRef.id });
   invalidateCache('staff');
 };
 
@@ -228,6 +274,8 @@ export const authenticateStaff = async (passcode: string): Promise<StaffUser | n
 };
 
 // --- Attendance Management ---
+
+export const getAttendanceRecordsSync = (): AttendanceRecord[] | null => getFromCache<AttendanceRecord[]>('attendance');
 
 export const getAttendanceRecords = async (forceRefresh = false): Promise<AttendanceRecord[]> => {
   if (!forceRefresh) {
@@ -264,7 +312,7 @@ export const saveAttendanceRecord = async (record: AttendanceRecord) => {
 
 export const clearAttendance = async () => {
   const snapshot = await getDocs(collection(db, COLL_ATTENDANCE));
-  const BATCH_SIZE = 400;
+  const BATCH_SIZE = 250;
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
@@ -273,14 +321,12 @@ export const clearAttendance = async () => {
     chunk.forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
-  invalidateCache('attendance');
+  setCache('attendance', []);
 };
 
-// Helpers (Async versions)
+// Helpers
 
-// Optimized: Get Attendance for specific Student in specific Class context
 export const getStudentAttendanceHistory = async (studentId: string, grade: string, className: string): Promise<{ date: string, status: AttendanceStatus }[]> => {
-  // Query attendance records for THIS CLASS ONLY to optimize read performance
   try {
     const q = query(
       collection(db, COLL_ATTENDANCE), 

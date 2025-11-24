@@ -21,6 +21,10 @@ const AttendanceReports: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
+  // School Identity
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
+  const SCHOOL_LOGO = localStorage.getItem('school_logo') || "https://www.raed.net/img?id=1471924";
+
   // Fetch report when date changes
   useEffect(() => {
     const fetchReport = async () => {
@@ -58,7 +62,7 @@ const AttendanceReports: React.FC = () => {
       });
 
       const prompt = `
-        بصفتك مستشار إداري لمتوسطة عماد الدين زنكي.
+        بصفتك مستشار إداري لـ "${SCHOOL_NAME}".
         قم بتحليل تقرير الغياب اليومي التالي:
         ${stats}
 
@@ -112,8 +116,9 @@ const AttendanceReports: React.FC = () => {
       {/* Print View */}
       <div id="daily-report-print" className="hidden">
          <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
+            {SCHOOL_LOGO && <img src={SCHOOL_LOGO} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />}
             <h1 className="text-2xl font-bold">تقرير الغياب اليومي</h1>
-            <h2 className="text-lg">متوسطة عماد الدين زنكي</h2>
+            <h2 className="text-lg">{SCHOOL_NAME}</h2>
             <p className="text-sm mt-2">التاريخ: {selectedDate}</p>
          </div>
          <div className="grid grid-cols-3 gap-4 mb-8 text-center">
@@ -162,7 +167,7 @@ const AttendanceReports: React.FC = () => {
                   type="date" 
                   value={selectedDate}
                   onChange={handleDateChange}
-                  className="pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-slate-800 font-bold"
+                  className="pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-slate-800 font-bold bg-white"
                 />
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
              </div>

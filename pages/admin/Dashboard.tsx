@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key, School, Image as ImageIcon } from 'lucide-react';
 import StatCard from '../../components/StatCard';
 import { getRequests, getStudents, clearRequests, clearAttendance, clearStudents } from '../../services/storage';
 import { RequestStatus, ExcuseRequest, Student } from '../../types';
@@ -13,11 +13,15 @@ const Dashboard: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
+  // School Identity State
+  const [schoolName, setSchoolName] = useState(localStorage.getItem('school_name') || 'متوسطة عماد الدين زنكي');
+  const [schoolLogo, setSchoolLogo] = useState(localStorage.getItem('school_logo') || 'https://www.raed.net/img?id=1471924');
+
   // AI State
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
-  const [customPrompt, setCustomPrompt] = useState(`بصفتك محلل بيانات ذكي لـ "متوسطة عماد الدين زنكي".
+  const [customPrompt, setCustomPrompt] = useState(`بصفتك محلل بيانات ذكي لـ "${schoolName}".
 المطلوب: توليد "تقرير التصنيف الذكي" يحتوي على قسمين رئيسيين:
 
 1. **تصنيف الأسباب الذكي (AI Reason Classification):**
@@ -58,6 +62,13 @@ const Dashboard: React.FC = () => {
         localStorage.setItem('gemini_api_key', apiKey);
         alert("تم حفظ مفتاح API بنجاح في المتصفح.");
     }
+  };
+
+  const saveSchoolIdentity = () => {
+    localStorage.setItem('school_name', schoolName);
+    localStorage.setItem('school_logo', schoolLogo);
+    alert("تم حفظ هوية المدرسة بنجاح. سيتم تحديث الموقع الآن.");
+    window.location.reload();
   };
 
   const getGeminiClient = () => {
@@ -218,7 +229,7 @@ const Dashboard: React.FC = () => {
       });
 
       const prompt = `
-        بصفتك مستشار إداري لمتوسطة عماد الدين زنكي.
+        بصفتك مستشار إداري لـ "${schoolName}".
         قم بتحليل هذا "التقرير المخصص" للبيانات المفلترة التالية:
         ${filterContext}
 
@@ -285,10 +296,13 @@ const Dashboard: React.FC = () => {
 
     {/* Printable Report Section (Hidden on screen) */}
     <div id="printable-report" className="hidden print:block p-8 bg-white text-slate-900">
-       <div className="flex justify-between items-end border-b-4 border-blue-900 pb-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-900 mb-2">تقرير الغياب والأعذار</h1>
-            <p className="text-xl text-amber-600 font-bold">متوسطة عماد الدين زنكي</p>
+       <div className="flex justify-between items-center border-b-4 border-blue-900 pb-6 mb-8">
+          <div className="flex items-center gap-4">
+            {schoolLogo && <img src={schoolLogo} alt="Logo" className="w-20 h-20 object-contain" />}
+            <div>
+                <h1 className="text-3xl font-bold text-blue-900 mb-2">تقرير الغياب والأعذار</h1>
+                <p className="text-xl text-amber-600 font-bold">{schoolName}</p>
+            </div>
           </div>
           <div className="text-left text-sm text-slate-500">
              <p>تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</p>
@@ -401,42 +415,44 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex justify-center">
-        <div className="bg-white p-1.5 rounded-xl border border-slate-200 inline-flex shadow-sm gap-1 overflow-x-auto max-w-full">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
-              activeTab === 'overview'
-              ? 'bg-blue-900 text-white shadow-md'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-            }`}
-          >
-            <BarChart3 size={18} />
-            <span>نظرة عامة والتحليل الذكي</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
-              activeTab === 'reports'
-              ? 'bg-blue-900 text-white shadow-md'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-            }`}
-          >
-            <ListFilter size={18} />
-            <span>منشئ التقارير المخصصة</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('maintenance')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
-              activeTab === 'maintenance'
-              ? 'bg-slate-800 text-white shadow-md'
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Settings2 size={18} />
-            <span>الصيانة والإعدادات</span>
-          </button>
+      {/* Navigation Tabs - Sticky */}
+      <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm py-4 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-slate-200/50 shadow-sm transition-all mb-4">
+        <div className="flex justify-center">
+          <div className="bg-white p-1.5 rounded-xl border border-slate-200 inline-flex shadow-sm gap-1 overflow-x-auto max-w-full">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+                activeTab === 'overview'
+                ? 'bg-blue-900 text-white shadow-md'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              <BarChart3 size={18} />
+              <span>نظرة عامة والتحليل الذكي</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+                activeTab === 'reports'
+                ? 'bg-blue-900 text-white shadow-md'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              <ListFilter size={18} />
+              <span>منشئ التقارير المخصصة</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('maintenance')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+                activeTab === 'maintenance'
+                ? 'bg-slate-800 text-white shadow-md'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Settings2 size={18} />
+              <span>الصيانة والإعدادات</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -713,6 +729,53 @@ const Dashboard: React.FC = () => {
       {/* ----------------- TAB 3: MAINTENANCE ----------------- */}
       {activeTab === 'maintenance' && (
         <div className="animate-fade-in space-y-6">
+            
+            {/* School Identity Settings */}
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+                <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
+                    <div className="bg-blue-50 p-3 rounded-xl text-blue-900 border border-blue-100">
+                        <School size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">الهوية المدرسية</h2>
+                        <p className="text-slate-500 text-sm">تخصيص اسم المدرسة والشعار الذي يظهر في التقارير</p>
+                    </div>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label className={labelClasses}>اسم المدرسة</label>
+                        <input 
+                            type="text" 
+                            value={schoolName} 
+                            onChange={(e) => setSchoolName(e.target.value)} 
+                            className={inputClasses}
+                            placeholder="مثال: متوسطة ..."
+                        />
+                    </div>
+                    <div>
+                        <label className={labelClasses}>رابط الشعار (URL)</label>
+                        <div className="flex gap-2">
+                             <input 
+                                type="text" 
+                                value={schoolLogo} 
+                                onChange={(e) => setSchoolLogo(e.target.value)} 
+                                className={inputClasses}
+                                placeholder="https://..."
+                            />
+                            {schoolLogo && <img src={schoolLogo} alt="Preview" className="w-10 h-10 object-contain border border-slate-200 rounded p-1" />}
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-4 text-left">
+                     <button 
+                        onClick={saveSchoolIdentity}
+                        className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-800 transition-colors"
+                    >
+                        حفظ الهوية وتحديث الموقع
+                    </button>
+                </div>
+            </div>
+
             {/* API Key Settings */}
             <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
                 <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">

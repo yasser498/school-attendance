@@ -269,15 +269,6 @@ const Dashboard: React.FC = () => {
   const inputClasses = "w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all text-sm";
   const labelClasses = "block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide";
 
-  if (dataLoading) {
-    return (
-       <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <Loader2 className="animate-spin text-blue-900 mb-4" size={48} />
-          <p className="text-slate-500 font-bold">جاري تحميل البيانات...</p>
-       </div>
-    );
-  }
-
   return (
     <>
     {/* Style for Print Layout */}
@@ -388,12 +379,26 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards - Always Visible */}
+      {/* Stats Cards - Skeleton aware */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="إجمالي الطلبات" value={stats.total} icon={FileText} color="indigo" />
-        <StatCard title="قيد المراجعة" value={stats.pending} icon={Clock} color="orange" />
-        <StatCard title="نسبة القبول" value={`${stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%`} icon={CheckCircle} color="green" />
-        <StatCard title="الطلاب المسجلين" value={stats.studentsCount} icon={Users} color="indigo" />
+        {dataLoading ? (
+           Array(4).fill(0).map((_, i) => (
+             <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 animate-pulse">
+                <div className="w-14 h-14 bg-slate-200 rounded-full"></div>
+                <div className="flex-1 space-y-2">
+                   <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                   <div className="h-8 bg-slate-200 rounded w-1/3"></div>
+                </div>
+             </div>
+           ))
+        ) : (
+          <>
+            <StatCard title="إجمالي الطلبات" value={stats.total} icon={FileText} color="indigo" />
+            <StatCard title="قيد المراجعة" value={stats.pending} icon={Clock} color="orange" />
+            <StatCard title="نسبة القبول" value={`${stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%`} icon={CheckCircle} color="green" />
+            <StatCard title="الطلاب المسجلين" value={stats.studentsCount} icon={Users} color="indigo" />
+          </>
+        )}
       </div>
 
       {/* Navigation Tabs */}
@@ -438,6 +443,28 @@ const Dashboard: React.FC = () => {
       {/* ----------------- TAB 1: OVERVIEW & AI ----------------- */}
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-fade-in">
+          {dataLoading ? (
+            <div className="space-y-6 animate-pulse">
+               {/* AI Banner Skeleton */}
+               <div className="h-64 bg-slate-200 rounded-2xl w-full"></div>
+               {/* Charts Skeleton */}
+               <div className="grid md:grid-cols-2 gap-6">
+                 <div className="h-96 bg-white rounded-2xl border border-slate-100 p-6">
+                    <div className="h-6 bg-slate-200 rounded w-1/3 mb-6"></div>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="h-24 bg-slate-200 rounded-xl"></div>
+                       <div className="h-24 bg-slate-200 rounded-xl"></div>
+                       <div className="h-24 bg-slate-200 rounded-xl"></div>
+                       <div className="h-24 bg-slate-200 rounded-xl"></div>
+                    </div>
+                 </div>
+                 <div className="h-96 bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-center">
+                    <div className="h-64 w-64 bg-slate-200 rounded-full"></div>
+                 </div>
+               </div>
+            </div>
+          ) : (
+          <>
           {/* AI Intelligence Section */}
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-3 bg-gradient-to-r from-blue-900 to-slate-900 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden transition-all duration-300 group">
@@ -504,7 +531,6 @@ const Dashboard: React.FC = () => {
 
           {/* Charts Grid */}
           <div className="grid md:grid-cols-2 gap-6">
-            {/* ... Charts code (Same as before) ... */}
             {/* Reason Classification */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
               <div className="flex items-center gap-2 mb-6">
@@ -568,16 +594,15 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
 
       {/* ----------------- TAB 2: REPORTS ----------------- */}
       {activeTab === 'reports' && (
         <div className="animate-fade-in space-y-6">
-           {/* ... Reports Filters and Content (Same as before) ... */}
-           {/* (Content hidden for brevity, assumes logic handles it) */}
            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-             {/* ... */}
              <div className="p-6 md:p-8">
                {/* Filters */}
                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -605,7 +630,17 @@ const Dashboard: React.FC = () => {
                   </div>
               </div>
               
-              {filteredReportData.length > 0 ? (
+              {dataLoading ? (
+                 <div className="animate-pulse space-y-4">
+                    <div className="grid grid-cols-4 gap-4">
+                       <div className="h-24 bg-slate-100 rounded-xl"></div>
+                       <div className="h-24 bg-slate-100 rounded-xl"></div>
+                       <div className="h-24 bg-slate-100 rounded-xl"></div>
+                       <div className="h-24 bg-slate-100 rounded-xl"></div>
+                    </div>
+                    <div className="h-12 bg-slate-100 rounded-xl"></div>
+                 </div>
+              ) : filteredReportData.length > 0 ? (
                 <div className="space-y-8 animate-fade-in">
                     {/* Summary Row */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

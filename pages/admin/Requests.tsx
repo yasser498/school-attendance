@@ -106,10 +106,6 @@ const Requests: React.FC = () => {
     [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-red-200', label: 'مرفوض' },
   };
 
-  if (loading && requests.length === 0) {
-    return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-900" size={32} /></div>;
-  }
-
   return (
     <div className="space-y-8 pb-12 animate-fade-in">
       {/* Header & Controls */}
@@ -165,7 +161,23 @@ const Requests: React.FC = () => {
 
       {/* Requests List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
-        {filteredRequests.length === 0 ? (
+        {loading ? (
+            <div className="animate-pulse">
+                {/* Header Skeleton */}
+                <div className="bg-slate-50 border-b border-slate-100 h-12 w-full"></div>
+                {/* Row Skeletons */}
+                {[...Array(6)].map((_, i) => (
+                    <div key={i} className="flex p-5 border-b border-slate-50">
+                        <div className="w-10 h-10 bg-slate-100 rounded-full mr-4"></div>
+                        <div className="flex-1 space-y-2">
+                           <div className="h-3 bg-slate-100 rounded w-1/4"></div>
+                           <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                        </div>
+                        <div className="w-20 h-6 bg-slate-100 rounded-full"></div>
+                    </div>
+                ))}
+            </div>
+        ) : filteredRequests.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-96 text-slate-400">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
               <FileText size={32} className="opacity-50" />

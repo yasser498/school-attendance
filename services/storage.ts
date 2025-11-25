@@ -9,7 +9,9 @@ import {
   where, 
   deleteDoc,
   writeBatch,
-  limit
+  limit,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus } from "../types";
 
@@ -43,6 +45,33 @@ export const invalidateCache = (key: string) => {
 
 // Helper for delay to prevent rate limiting/blocking
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- DIAGNOSTIC TOOL ---
+export const testFirebaseConnection = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    const testRef = doc(db, 'system_diagnostics', 'connection_test');
+    await setDoc(testRef, {
+      lastChecked: new Date().toISOString(),
+      status: 'online',
+      platform: navigator.userAgent
+    });
+    
+    // Verify by reading it back
+    const docSnap = await getDoc(testRef);
+    if (docSnap.exists()) {
+      return { success: true, message: "تم الاتصال بقاعدة البيانات والكتابة والقراءة بنجاح! ✅" };
+    } else {
+      return { success: false, message: "تمت الكتابة لكن فشلت القراءة (Verify failed)." };
+    }
+  } catch (error: any) {
+    console.error("Firebase Connection Test Error:", error);
+    let msg = error.message;
+    if (error.code === 'permission-denied') msg = "تم رفض الصلاحية (Permission Denied). تأكد من Rules.";
+    if (error.code === 'unavailable') msg = "الخدمة غير متاحة (Offline). تأكد من الإنترنت.";
+    if (error.code === 'not-found' || msg.includes('database')) msg = "قاعدة البيانات غير موجودة! تأكد من إنشاء Firestore Database في لوحة تحكم جوجل.";
+    return { success: false, message: `فشل الاتصال: ${msg}` };
+  }
+};
 
 // --- Students ---
 
@@ -100,6 +129,7 @@ export const getAvailableClassesForGrade = async (grade: string): Promise<string
 
 export const addStudent = async (student: Student): Promise<Student> => {
   const { id, ...data } = student;
+  // Firestore Add
   const docRef = await addDoc(collection(db, COLL_STUDENTS), data);
   const newStudent = { ...student, id: docRef.id };
   
@@ -107,6 +137,9 @@ export const addStudent = async (student: Student): Promise<Student> => {
   const cached = getFromCache<Student[]>('students');
   if (cached) {
     setCache('students', [...cached, newStudent]);
+  } else {
+    // If no cache exists, just invalidate to force fetch next time
+    invalidateCache('students');
   }
   
   return newStudent;
@@ -133,7 +166,6 @@ export const syncStudentsBatch = async (
   const BATCH_SIZE = 150;
 
   const processChunk = async (operations: any[], type: 'add' | 'update' | 'delete') => {
-    let successCount = 0;
     
     for (let i = 0; i < operations.length; i += BATCH_SIZE) {
       // Add delay between batches to prevent "ERR_BLOCKED_BY_CLIENT"
@@ -179,7 +211,6 @@ export const syncStudentsBatch = async (
 
       try {
         await batch.commit();
-        successCount += chunk.length;
         console.log(`Successfully processed batch of ${chunk.length} ${type} operations.`);
       } catch (error: any) {
         console.error("Batch commit failed:", error);
@@ -187,7 +218,7 @@ export const syncStudentsBatch = async (
         if (error.code === 'permission-denied') {
           throw new Error("لا تملك صلاحية الحفظ. تأكد من إعدادات Firestore Rules.");
         }
-        // Otherwise continue to next batch (best effort)
+        throw error; // Re-throw to stop process and alert user
       }
     }
   };

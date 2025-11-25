@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key, School, Image as ImageIcon } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key, School, Image as ImageIcon, Wifi } from 'lucide-react';
 import StatCard from '../../components/StatCard';
-import { getRequests, getStudents, clearRequests, clearAttendance, clearStudents } from '../../services/storage';
+import { getRequests, getStudents, clearRequests, clearAttendance, clearStudents, testFirebaseConnection } from '../../services/storage';
 import { RequestStatus, ExcuseRequest, Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 import { GoogleGenAI } from "@google/genai";
@@ -40,6 +40,10 @@ const Dashboard: React.FC = () => {
   
   // API Key State
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+  
+  // Connection Test State
+  const [connectionTestResult, setConnectionTestResult] = useState<{success: boolean, message: string} | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,6 +75,14 @@ const Dashboard: React.FC = () => {
     window.location.reload();
   };
 
+  const runConnectionTest = async () => {
+    setTestingConnection(true);
+    setConnectionTestResult(null);
+    const result = await testFirebaseConnection();
+    setConnectionTestResult(result);
+    setTestingConnection(false);
+  };
+
   const getGeminiClient = () => {
     // Priority: LocalStorage (User Input) -> Env Var
     const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
@@ -99,7 +111,7 @@ const Dashboard: React.FC = () => {
       const dayName = date.toLocaleDateString('ar-SA', { weekday: 'long' });
       dayCounts[dayName] = (dayCounts[dayName] || 0) + 1; 
     });
-    const busiestDay = Object.keys(dayCounts).reduce((a, b) => dayCounts[a] > dayCounts[b] ? a : b, 'لا يوجد');
+    const busiestDay = Object.keys(dayCounts).reduce((a, b) => (dayCounts[a] as number) > (dayCounts[b] as number) ? a : b, 'لا يوجد');
 
     return {
       total,
@@ -729,6 +741,44 @@ const Dashboard: React.FC = () => {
       {/* ----------------- TAB 3: MAINTENANCE ----------------- */}
       {activeTab === 'maintenance' && (
         <div className="animate-fade-in space-y-6">
+
+             {/* Connection Diagnostic Tool */}
+             <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+                <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
+                    <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600 border border-emerald-100">
+                        <Wifi size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">فحص اتصال قاعدة البيانات</h2>
+                        <p className="text-slate-500 text-sm">أداة لتشخيص مشاكل الحفظ والاتصال بسيرفرات Firebase</p>
+                    </div>
+                </div>
+                
+                <div className="flex flex-col items-start gap-4">
+                   <p className="text-sm text-slate-600">
+                     إذا كنت تواجه مشكلة في حفظ الطلاب أو المستخدمين، اضغط على الزر أدناه للتحقق من أن قاعدة البيانات متصلة وتعمل بشكل صحيح.
+                   </p>
+                   
+                   <button 
+                     onClick={runConnectionTest}
+                     disabled={testingConnection}
+                     className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                   >
+                     {testingConnection ? <Loader2 className="animate-spin" size={20} /> : <Activity size={20} />}
+                     تشخيص الاتصال الآن
+                   </button>
+
+                   {connectionTestResult && (
+                      <div className={`mt-4 p-4 rounded-xl border w-full flex items-start gap-3 ${connectionTestResult.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                         {connectionTestResult.success ? <CheckCircle className="shrink-0" size={20} /> : <AlertTriangle className="shrink-0" size={20} />}
+                         <div>
+                            <p className="font-bold">{connectionTestResult.success ? 'الاتصال ناجح' : 'فشل الاتصال'}</p>
+                            <p className="text-sm mt-1">{connectionTestResult.message}</p>
+                         </div>
+                      </div>
+                   )}
+                </div>
+             </div>
             
             {/* School Identity Settings */}
             <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">

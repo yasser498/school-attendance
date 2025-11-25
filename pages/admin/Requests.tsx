@@ -13,6 +13,18 @@ const Requests: React.FC = () => {
   const [selectedReq, setSelectedReq] = useState<ExcuseRequest | null>(null);
   const [loading, setLoading] = useState(true);
   
+  // Responsive List logic
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 768;
+  const itemSize = isMobile ? 140 : 90; // Taller rows for mobile stacking
+
   // AI Reply State
   const [aiReply, setAiReply] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -118,6 +130,8 @@ const Requests: React.FC = () => {
     [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-red-200', label: 'مرفوض' },
   };
 
+  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+
   // --- Virtualized Row Component ---
   const Row = ({ index, style }: ListChildComponentProps) => {
     const req = filteredRequests[index];
@@ -126,107 +140,134 @@ const Requests: React.FC = () => {
     return (
       <div 
         style={style} 
-        className="flex items-center border-b border-slate-50 hover:bg-blue-50/30 transition-colors group px-2"
+        className="flex items-center border-b border-slate-50 hover:bg-blue-50/30 transition-colors group px-3 py-2"
       >
-        {/* Student Column (30%) */}
-        <div className="w-[30%] p-4">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm shrink-0">
-              {req.studentName.charAt(0)}
+        {isMobile ? (
+           // Mobile Row Layout (Stacked)
+           <div className="w-full flex flex-col gap-2" onClick={() => setSelectedReq(req)}>
+              <div className="flex justify-between items-start">
+                 <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
+                       {req.studentName.charAt(0)}
+                    </div>
+                    <div>
+                       <p className="font-bold text-slate-900 text-sm">{req.studentName}</p>
+                       <p className="text-xs text-slate-500">{req.grade} - {req.className}</p>
+                    </div>
+                 </div>
+                 <div className={`px-2 py-1 rounded-md text-[10px] font-bold border ${styleObj.bg} ${styleObj.text} ${styleObj.border}`}>
+                    {styleObj.label}
+                 </div>
+              </div>
+              <div className="flex justify-between items-center pl-1">
+                 <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="bg-slate-100 px-2 py-0.5 rounded">{req.reason}</span>
+                    <span className="flex items-center gap-1"><Calendar size={12}/> {req.date}</span>
+                 </div>
+                 {req.attachmentName && <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded">📎 مرفق</span>}
+              </div>
+           </div>
+        ) : (
+           // Desktop Row Layout
+           <>
+            <div className="w-[30%] p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm shrink-0">
+                  {req.studentName.charAt(0)}
+                </div>
+                <div className="truncate">
+                  <p className="font-bold text-slate-800 text-sm mb-0.5 truncate">{req.studentName}</p>
+                  <p className="font-mono text-xs text-slate-400 tracking-wide">{req.studentId}</p>
+                </div>
+              </div>
             </div>
-            <div className="truncate">
-              <p className="font-bold text-slate-800 text-sm mb-0.5 truncate">{req.studentName}</p>
-              <p className="font-mono text-xs text-slate-400 tracking-wide">{req.studentId}</p>
+
+            <div className="w-[15%] p-4">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-slate-700">{req.grade}</span>
+                <span className="text-xs text-slate-500">فصل {req.className}</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Class Column (15%) */}
-        <div className="w-[15%] p-4">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-700">{req.grade}</span>
-            <span className="text-xs text-slate-500">فصل {req.className}</span>
-          </div>
-        </div>
-
-        {/* Reason Column (25%) */}
-        <div className="w-[25%] p-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-               <span className="font-bold text-slate-800 text-sm truncate">{req.reason}</span>
-               {req.attachmentName && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">مرفق</span>}
+            <div className="w-[25%] p-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-800 text-sm truncate">{req.reason}</span>
+                  {req.attachmentName && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">مرفق</span>}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Calendar size={12} />
+                  <span>{req.date}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Calendar size={12} />
-              <span>{req.date}</span>
+
+            <div className="w-[20%] p-4">
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${styleObj.bg} ${styleObj.border}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${styleObj.dot}`}></span>
+                <span className={`text-xs font-bold ${styleObj.text}`}>{styleObj.label}</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Status Column (20%) */}
-        <div className="w-[20%] p-4">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${styleObj.bg} ${styleObj.border}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${styleObj.dot}`}></span>
-            <span className={`text-xs font-bold ${styleObj.text}`}>{styleObj.label}</span>
-          </div>
-        </div>
-
-        {/* Action Column (10%) */}
-        <div className="w-[10%] p-4 flex justify-end">
-          <button 
-            onClick={() => setSelectedReq(req)}
-            className="p-2 text-slate-400 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-all"
-          >
-            <Eye size={20} />
-          </button>
-        </div>
+            <div className="w-[10%] p-4 flex justify-end">
+              <button 
+                onClick={() => setSelectedReq(req)}
+                className="p-2 text-slate-400 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-all"
+              >
+                <Eye size={20} />
+              </button>
+            </div>
+           </>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="space-y-8 pb-12 animate-fade-in">
+    <div className="space-y-6 md:space-y-8 pb-12 animate-fade-in">
       {/* Header & Controls */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6">
+      <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-blue-900">إدارة طلبات الأعذار</h1>
             <p className="text-slate-500 mt-1 text-sm">مراجعة واتخاذ القرارات بشأن غياب الطلاب</p>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-auto">
-             <button 
-               onClick={handleRefresh}
-               className="bg-slate-100 text-slate-600 p-2.5 rounded-xl hover:bg-slate-200 transition-colors"
-               title="تحديث القائمة"
-             >
-               <RefreshCw size={20} className={loading ? 'animate-spin' : ''}/>
-             </button>
-             <div className="relative w-full md:w-80">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="بحث باسم الطالب أو رقم الهوية..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm transition-all"
-                />
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+             <div className="flex gap-2 w-full">
+               <button 
+                 onClick={handleRefresh}
+                 className="bg-slate-100 text-slate-600 p-3 md:p-2.5 rounded-xl hover:bg-slate-200 transition-colors shrink-0"
+                 title="تحديث القائمة"
+               >
+                 <RefreshCw size={20} className={loading ? 'animate-spin' : ''}/>
+               </button>
+               <div className="relative w-full md:w-80">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="بحث بالاسم أو الهوية..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pr-10 pl-4 py-3 md:py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm transition-all"
+                  />
+               </div>
              </div>
           </div>
         </div>
 
         {/* Modern Tabs */}
-        <div className="flex items-center gap-1 border-b border-slate-100 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1 border-b border-slate-100 overflow-x-auto pb-1 hide-scrollbar">
           {(['ALL', RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.REJECTED] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={`
-                relative px-6 py-3 text-sm font-bold transition-all whitespace-nowrap
+                relative px-4 md:px-6 py-3 text-sm font-bold transition-all whitespace-nowrap flex-shrink-0
                 ${filter === f ? 'text-blue-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-t-lg'}
               `}
             >
               <div className="flex items-center gap-2">
-                <span>{f === 'ALL' ? 'كل الطلبات' : f === RequestStatus.PENDING ? 'طلبات جديدة' : f === RequestStatus.APPROVED ? 'المقبولة' : 'المرفوضة'}</span>
+                <span>{f === 'ALL' ? 'الكل' : f === RequestStatus.PENDING ? 'جديدة' : f === RequestStatus.APPROVED ? 'مقبولة' : 'مرفوضة'}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs ${filter === f ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                   {counts[f]}
                 </span>
@@ -239,14 +280,16 @@ const Requests: React.FC = () => {
 
       {/* Requests List (Virtualized) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
-        {/* Static Header Row */}
-        <div className="flex bg-slate-50/80 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100 pr-2 pl-4">
-           <div className="w-[30%] p-5 text-right">الطالب</div>
-           <div className="w-[15%] p-5 text-right">الصف / الفصل</div>
-           <div className="w-[25%] p-5 text-right">بيانات العذر</div>
-           <div className="w-[20%] p-5 text-right">الحالة</div>
-           <div className="w-[10%] p-5 text-left">إجراء</div>
-        </div>
+        {/* Header Row - Desktop Only */}
+        {!isMobile && (
+          <div className="flex bg-slate-50/80 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100 pr-2 pl-4">
+             <div className="w-[30%] p-5 text-right">الطالب</div>
+             <div className="w-[15%] p-5 text-right">الصف / الفصل</div>
+             <div className="w-[25%] p-5 text-right">بيانات العذر</div>
+             <div className="w-[20%] p-5 text-right">الحالة</div>
+             <div className="w-[10%] p-5 text-left">إجراء</div>
+          </div>
+        )}
 
         {loading ? (
             <div className="animate-pulse">
@@ -257,7 +300,6 @@ const Requests: React.FC = () => {
                            <div className="h-3 bg-slate-100 rounded w-1/4"></div>
                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
                         </div>
-                        <div className="w-20 h-6 bg-slate-100 rounded-full"></div>
                     </div>
                 ))}
             </div>
@@ -269,11 +311,11 @@ const Requests: React.FC = () => {
             <p className="font-medium text-lg">لا توجد طلبات في هذه القائمة</p>
           </div>
         ) : (
-          <div style={{ direction: 'ltr' }}> {/* Reset direction for scrollbar, handle RTL inside items */}
+          <div style={{ direction: 'ltr' }}>
             <List
               height={500}
               itemCount={filteredRequests.length}
-              itemSize={100}
+              itemSize={itemSize}
               width={'100%'}
               direction="rtl"
               className="scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
@@ -287,10 +329,10 @@ const Requests: React.FC = () => {
       {/* Professional Modal */}
       {selectedReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[95vh]">
             
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
               <div className="flex items-center gap-3">
                  <div className="bg-blue-50 p-2 rounded-lg text-blue-900">
                     <User size={24} />
@@ -309,22 +351,24 @@ const Requests: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3">
                  
                  {/* Sidebar Details */}
-                 <div className="md:col-span-1 bg-slate-50 p-6 border-l border-slate-100 space-y-6">
-                    <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase block mb-1">اسم الطالب</label>
-                       <p className="font-bold text-slate-800 text-sm">{selectedReq.studentName}</p>
+                 <div className="md:col-span-1 bg-slate-50 p-6 border-l border-slate-100 space-y-4 md:space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-1 gap-4">
+                        <div>
+                           <label className="text-xs font-bold text-slate-400 uppercase block mb-1">اسم الطالب</label>
+                           <p className="font-bold text-slate-800 text-sm">{selectedReq.studentName}</p>
+                        </div>
+                        <div>
+                           <label className="text-xs font-bold text-slate-400 uppercase block mb-1">السجل المدني</label>
+                           <p className="font-mono text-slate-600 text-sm bg-white border border-slate-200 px-2 py-1 rounded inline-block">{selectedReq.studentId}</p>
+                        </div>
+                        <div>
+                           <label className="text-xs font-bold text-slate-400 uppercase block mb-1">الصف والفصل</label>
+                           <p className="font-medium text-slate-700 text-sm">{selectedReq.grade} - {selectedReq.className}</p>
+                        </div>
                     </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase block mb-1">السجل المدني</label>
-                       <p className="font-mono text-slate-600 text-sm bg-white border border-slate-200 px-2 py-1 rounded inline-block">{selectedReq.studentId}</p>
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase block mb-1">الصف والفصل</label>
-                       <p className="font-medium text-slate-700 text-sm">{selectedReq.grade} - {selectedReq.className}</p>
-                    </div>
-                    <div className="pt-4 border-t border-slate-200">
+                    <div className="pt-2 md:pt-4 border-t border-slate-200">
                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">تاريخ الغياب</label>
-                       <div className="flex items-center gap-2 text-blue-900 font-bold bg-blue-100/50 p-2 rounded-lg border border-blue-100 text-sm">
+                       <div className="flex items-center gap-2 text-blue-900 font-bold bg-blue-100/50 p-2 rounded-lg border border-blue-100 text-sm w-fit">
                           <Calendar size={16} />
                           {selectedReq.date}
                        </div>
@@ -357,20 +401,32 @@ const Requests: React.FC = () => {
                     <div>
                        <h4 className="font-bold text-slate-800 mb-3 text-sm">المرفقات والإثباتات</h4>
                        {selectedReq.attachmentName ? (
-                          <div 
-                             onClick={() => selectedReq.attachmentUrl && window.open(selectedReq.attachmentUrl, '_blank')}
-                             className={`flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 transition-colors group ${selectedReq.attachmentUrl ? 'cursor-pointer hover:bg-slate-100' : 'opacity-50'}`}
-                             title={selectedReq.attachmentUrl ? 'اضغط للمعاينة' : 'لا يوجد رابط للملف'}
-                          >
-                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 shadow-sm text-red-500">
-                                   <FileText size={20} />
-                                </div>
-                                <div>
-                                   <p className="text-sm font-bold text-slate-700 group-hover:text-blue-900 transition-colors">{selectedReq.attachmentName}</p>
-                                   <p className="text-xs text-slate-400">{selectedReq.attachmentUrl ? 'انقر للمعاينة' : 'الملف غير متوفر'}</p>
+                          <div>
+                             <div 
+                                onClick={() => selectedReq.attachmentUrl && window.open(selectedReq.attachmentUrl, '_blank')}
+                                className={`flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 transition-colors group ${selectedReq.attachmentUrl ? 'cursor-pointer hover:bg-slate-100' : 'opacity-50'}`}
+                                title={selectedReq.attachmentUrl ? 'اضغط للمعاينة' : 'لا يوجد رابط للملف'}
+                             >
+                                <div className="flex items-center gap-3">
+                                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 shadow-sm text-red-500">
+                                      <FileText size={20} />
+                                   </div>
+                                   <div className="overflow-hidden">
+                                      <p className="text-sm font-bold text-slate-700 group-hover:text-blue-900 transition-colors truncate">{selectedReq.attachmentName}</p>
+                                      <p className="text-xs text-slate-400">{selectedReq.attachmentUrl ? 'انقر للمعاينة' : 'الملف غير متوفر'}</p>
+                                   </div>
                                 </div>
                              </div>
+                             
+                             {/* Image Preview */}
+                             {selectedReq.attachmentUrl && isImage(selectedReq.attachmentUrl) && (
+                                <div className="mt-3 relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                    <img src={selectedReq.attachmentUrl} alt="Attachment Preview" className="w-full h-auto max-h-48 object-cover" />
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => window.open(selectedReq.attachmentUrl, '_blank')}>
+                                        <span className="text-white font-bold flex items-center gap-2"><Eye size={20} /> تكبير الصورة</span>
+                                    </div>
+                                </div>
+                             )}
                           </div>
                        ) : (
                           <div className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-300">لا يوجد مرفقات</div>
@@ -406,7 +462,7 @@ const Requests: React.FC = () => {
                              <button 
                                onClick={() => generateAiReply('accept')}
                                disabled={isGenerating}
-                               className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 border border-emerald-400/30"
+                               className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2.5 px-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 border border-emerald-400/30"
                              >
                                 {isGenerating && replyType === 'accept' ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
                                 رد قبول
@@ -414,7 +470,7 @@ const Requests: React.FC = () => {
                              <button 
                                onClick={() => generateAiReply('reject')}
                                disabled={isGenerating}
-                               className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs py-2 px-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 border border-white/10"
+                               className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs py-2.5 px-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 border border-white/10"
                              >
                                 {isGenerating && replyType === 'reject' ? <Loader2 size={12} className="animate-spin" /> : <X size={14} />}
                                 رد رفض
@@ -427,18 +483,18 @@ const Requests: React.FC = () => {
             </div>
             
             {/* Modal Footer Actions */}
-            <div className="p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex gap-3">
+            <div className="p-4 md:p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex gap-3">
                <button 
                 onClick={() => handleStatusChange(selectedReq.id, RequestStatus.APPROVED)}
-                className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10"
+                className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 active:scale-95"
                >
-                 <Check size={18} /> اعتماد القبول
+                 <Check size={18} /> اعتماد
                </button>
                <button 
                 onClick={() => handleStatusChange(selectedReq.id, RequestStatus.REJECTED)}
-                className="flex-1 bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 active:scale-95"
                >
-                 <X size={18} /> رفض الطلب
+                 <X size={18} /> رفض
                </button>
             </div>
 

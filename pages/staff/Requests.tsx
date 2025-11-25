@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, X, Eye, Calendar, Search, User, FileText, RefreshCw, Loader2, MessageCircle } from 'lucide-react';
@@ -75,6 +76,9 @@ const StaffRequests: React.FC = () => {
     [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'تم القبول' },
     [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', label: 'مرفوض' },
   };
+
+  // Helper to check if attachment is an image
+  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
 
   if (!currentUser) return null;
 
@@ -212,18 +216,36 @@ const StaffRequests: React.FC = () => {
 
                     <div>
                        <label className="text-xs font-bold text-slate-400 uppercase">المرفقات</label>
-                       {selectedReq.attachmentUrl ? (
-                          <a 
-                            href={selectedReq.attachmentUrl} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="flex items-center gap-3 p-3 mt-2 rounded-xl border border-blue-100 bg-blue-50 hover:bg-blue-100 transition-colors text-blue-900 font-bold text-sm group"
-                          >
-                             <div className="bg-white p-2 rounded-lg text-blue-500 group-hover:scale-110 transition-transform"><FileText size={18} /></div>
-                             <span>فتح المرفق (صورة/PDF)</span>
-                          </a>
+                       {selectedReq.attachmentName ? (
+                          <div>
+                             {selectedReq.attachmentUrl ? (
+                                <>
+                                   <a 
+                                     href={selectedReq.attachmentUrl} 
+                                     target="_blank" 
+                                     rel="noreferrer"
+                                     className="flex items-center gap-3 p-3 mt-2 rounded-xl border border-blue-100 bg-blue-50 hover:bg-blue-100 transition-colors text-blue-900 font-bold text-sm group"
+                                   >
+                                      <div className="bg-white p-2 rounded-lg text-blue-500 group-hover:scale-110 transition-transform"><FileText size={18} /></div>
+                                      <span>فتح المرفق (تحميل/معاينة)</span>
+                                   </a>
+                                   
+                                   {/* Image Preview */}
+                                   {isImage(selectedReq.attachmentUrl) && (
+                                      <div className="mt-3 relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                          <img src={selectedReq.attachmentUrl} alt="Attachment Preview" className="w-full h-auto max-h-48 object-cover" />
+                                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => window.open(selectedReq.attachmentUrl, '_blank')}>
+                                              <span className="text-white font-bold flex items-center gap-2"><Eye size={20} /> تكبير الصورة</span>
+                                          </div>
+                                      </div>
+                                   )}
+                                </>
+                             ) : (
+                                <p className="text-sm text-slate-400 italic mt-1 bg-slate-50 p-2 rounded">لا يوجد مرفق (أو تم حذفه)</p>
+                             )}
+                          </div>
                        ) : (
-                          <p className="text-sm text-slate-400 italic mt-1 bg-slate-50 p-2 rounded">لا يوجد مرفق (أو تم حذفه)</p>
+                          <div className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-300">لا يوجد مرفقات</div>
                        )}
                     </div>
                  </div>

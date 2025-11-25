@@ -400,14 +400,14 @@ const Dashboard: React.FC = () => {
           <h1 className="text-2xl font-bold text-blue-900">لوحة القيادة المركزية</h1>
           <p className="text-slate-500 mt-1">تحليل ذكي لبيانات الغياب والأعذار</p>
         </div>
-        <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200">
+        <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 w-full md:w-auto">
           <Calendar size={18} className="text-slate-400" />
           <span className="text-sm font-bold text-slate-700">{new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
         </div>
       </div>
 
       {/* Stats Cards - Skeleton aware */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {dataLoading ? (
            Array(4).fill(0).map((_, i) => (
              <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 animate-pulse">
@@ -429,41 +429,41 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Navigation Tabs - Sticky */}
-      <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm py-4 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-slate-200/50 shadow-sm transition-all mb-4">
-        <div className="flex justify-center">
-          <div className="bg-white p-1.5 rounded-xl border border-slate-200 inline-flex shadow-sm gap-1 overflow-x-auto max-w-full">
+      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm py-2 md:py-4 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-slate-200/50 shadow-sm transition-all mb-4">
+        <div className="flex justify-center overflow-x-auto hide-scrollbar">
+          <div className="bg-white p-1 rounded-xl border border-slate-200 inline-flex shadow-sm gap-1 min-w-full md:min-w-0">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'overview'
                 ? 'bg-blue-900 text-white shadow-md'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
               <BarChart3 size={18} />
-              <span>نظرة عامة والتحليل الذكي</span>
+              <span>نظرة عامة</span>
             </button>
             <button
               onClick={() => setActiveTab('reports')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'reports'
                 ? 'bg-blue-900 text-white shadow-md'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
               <ListFilter size={18} />
-              <span>منشئ التقارير المخصصة</span>
+              <span>تقارير مخصصة</span>
             </button>
             <button
               onClick={() => setActiveTab('maintenance')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'maintenance'
                 ? 'bg-slate-800 text-white shadow-md'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
               }`}
             >
               <Settings2 size={18} />
-              <span>الصيانة والإعدادات</span>
+              <span>الإعدادات</span>
             </button>
           </div>
         </div>
@@ -502,7 +502,7 @@ const Dashboard: React.FC = () => {
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 relative z-10">
                   <div className="flex-1">
                     <div className="flex items-start gap-4 mb-4">
-                      <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/20">
+                      <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/20 shrink-0">
                           <BrainCircuit size={32} className="text-amber-400" />
                       </div>
                       <div>
@@ -539,7 +539,7 @@ const Dashboard: React.FC = () => {
                   <button 
                     onClick={generateAiReport}
                     disabled={isGenerating}
-                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-amber-900/20 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap self-start md:self-center"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-amber-900/20 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap self-start md:self-center"
                   >
                     {isGenerating ? <Loader2 className="animate-spin" size={20}/> : <Sparkles size={20} />}
                     <span>{isGenerating ? 'جاري التحليل...' : 'بدء التصنيف الذكي'}</span>
@@ -634,7 +634,7 @@ const Dashboard: React.FC = () => {
            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
              <div className="p-6 md:p-8">
                {/* Filters */}
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                   <div>
                     <label className={labelClasses}>من تاريخ</label>
                     <input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} className={inputClasses} />
@@ -696,18 +696,18 @@ const Dashboard: React.FC = () => {
                       <div className="text-sm text-slate-500 font-medium">
                         تم العثور على {reportStats.total} نتيجة مطابقة
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 w-full md:w-auto">
                         <button
                           onClick={generateFilteredReportAi}
                           disabled={isGeneratingReportAi}
-                          className="flex items-center gap-2 bg-amber-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed text-sm"
                         >
                           {isGeneratingReportAi ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                           <span>تحليل بالذكاء الاصطناعي</span>
                         </button>
                         <button
                           onClick={handlePrintReport}
-                          className="flex items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-700 transition-colors shadow-sm"
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-700 transition-colors shadow-sm text-sm"
                         >
                           <Printer size={18} />
                           <span>طباعة التقرير</span>
@@ -744,7 +744,7 @@ const Dashboard: React.FC = () => {
         <div className="animate-fade-in space-y-6">
 
              {/* Connection Diagnostic Tool */}
-             <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+             <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8">
                 <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600 border border-emerald-100">
                         <Wifi size={24} />
@@ -755,7 +755,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
                 
-                <div className="flex flex-col items-start gap-4">
+                <div className="flex flex-col items-start gap-4 w-full">
                    <p className="text-sm text-slate-600">
                      إذا كنت تواجه مشكلة في حفظ الطلاب أو المستخدمين، اضغط على الزر أدناه للتحقق من أن قاعدة البيانات متصلة وتعمل بشكل صحيح.
                    </p>
@@ -763,7 +763,7 @@ const Dashboard: React.FC = () => {
                    <button 
                      onClick={runConnectionTest}
                      disabled={testingConnection}
-                     className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                     className="w-full md:w-auto bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
                    >
                      {testingConnection ? <Loader2 className="animate-spin" size={20} /> : <Activity size={20} />}
                      تشخيص الاتصال الآن
@@ -782,7 +782,7 @@ const Dashboard: React.FC = () => {
              </div>
             
             {/* School Identity Settings */}
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8">
                 <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div className="bg-blue-50 p-3 rounded-xl text-blue-900 border border-blue-100">
                         <School size={24} />
@@ -820,7 +820,7 @@ const Dashboard: React.FC = () => {
                 <div className="mt-4 text-left">
                      <button 
                         onClick={saveSchoolIdentity}
-                        className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-800 transition-colors"
+                        className="w-full md:w-auto bg-blue-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-800 transition-colors"
                     >
                         حفظ الهوية وتحديث الموقع
                     </button>
@@ -828,18 +828,18 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* API Key Settings */}
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8">
                 <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div className="bg-amber-50 p-3 rounded-xl text-amber-600 border border-amber-100">
                         <Key size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800">إعدادات الذكاء الاصطناعي (Gemini AI)</h2>
-                        <p className="text-slate-500 text-sm">أدخل مفتاح API الخاص بك لتفعيل التقارير الذكية</p>
+                        <h2 className="text-xl font-bold text-slate-800">إعدادات الذكاء الاصطناعي</h2>
+                        <p className="text-slate-500 text-sm">مفتاح Gemini API لتفعيل التقارير الذكية</p>
                     </div>
                 </div>
-                <div className="flex gap-4 items-end">
-                    <div className="flex-1">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="w-full flex-1">
                         <label className={labelClasses}>Gemini API Key</label>
                         <input 
                             type="password" 
@@ -849,13 +849,12 @@ const Dashboard: React.FC = () => {
                             placeholder="AIzaSy..."
                         />
                         <p className="text-xs text-slate-400 mt-2">
-                            يمكنك الحصول على المفتاح مجاناً من <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-blue-600 underline">Google AI Studio</a>.
                             يتم حفظ المفتاح في متصفحك فقط.
                         </p>
                     </div>
                     <button 
                         onClick={saveApiKey}
-                        className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-800 transition-colors mb-[2px]"
+                        className="w-full md:w-auto bg-blue-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-800 transition-colors mb-[2px]"
                     >
                         حفظ المفتاح
                     </button>
@@ -863,7 +862,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Danger Zone */}
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8">
                 <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div className="bg-red-50 p-3 rounded-xl text-red-600 border border-red-100">
                         <Database size={24} />
@@ -891,7 +890,7 @@ const Dashboard: React.FC = () => {
                                 <FileText size={20} className="text-slate-400" />
                                 <h3 className="font-bold">طلبات الأعذار</h3>
                             </div>
-                            <p className="text-sm text-slate-500 mb-6 min-h-[40px]">حذف جميع طلبات الأعذار المقدمة من أولياء الأمور.</p>
+                            <p className="text-sm text-slate-500 mb-6 min-h-[40px]">حذف جميع طلبات الأعذار المقدمة.</p>
                             <button 
                                 onClick={() => handleDeleteData('requests')}
                                 className="w-full flex items-center justify-center gap-2 bg-white border-2 border-slate-200 text-slate-600 hover:border-red-500 hover:text-red-600 hover:bg-red-50 py-3 rounded-lg font-bold transition-all"

@@ -78,6 +78,28 @@ const Submission: React.FC = () => {
     }
   }, [searchParams, students, dataLoading]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      
+      // Validation: Size (Max 5MB)
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        alert("حجم الملف كبير جداً. الحد الأقصى هو 5 ميجابايت.");
+        e.target.value = ''; // Reset input
+        return;
+      }
+      
+      // Validation: Type
+      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      if (!allowedTypes.includes(selectedFile.type)) {
+        alert("نوع الملف غير مدعوم. يرجى رفع صورة (JPG/PNG) أو ملف PDF.");
+        e.target.value = ''; // Reset input
+        return;
+      }
+
+      setFile(selectedFile);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +183,7 @@ const Submission: React.FC = () => {
   minDateObj.setDate(today.getDate() - 7);
   const minDate = minDateObj.toISOString().split('T')[0];
 
-  const inputClasses = "w-full p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400";
+  const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base";
   const labelClasses = "block text-sm font-bold text-slate-700 mb-2";
 
   if (dataLoading) {
@@ -186,13 +208,13 @@ const Submission: React.FC = () => {
         <div className="pt-6 space-y-3">
           <button 
             onClick={() => navigate('/')}
-            className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+            className="w-full py-4 md:py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-lg md:text-base"
           >
             عودة للرئيسية
           </button>
           <button 
             onClick={() => window.location.reload()}
-            className="w-full py-3 bg-blue-900 text-white font-bold rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20"
+            className="w-full py-4 md:py-3 bg-blue-900 text-white font-bold rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 text-lg md:text-base"
           >
             تقديم طلب آخر
           </button>
@@ -202,13 +224,13 @@ const Submission: React.FC = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto px-2 md:px-0">
       <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        <div className="bg-blue-900 p-8 text-white relative overflow-hidden">
+        <div className="bg-blue-900 p-6 md:p-8 text-white relative overflow-hidden">
           <div className="relative z-10 flex justify-between items-start">
             <div>
-               <h2 className="text-3xl font-bold text-white mb-2">تقديم عذر غياب</h2>
-               <p className="text-blue-200 text-sm font-medium opacity-90">نموذج رسمي - متوسطة عماد الدين زنكي</p>
+               <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">تقديم عذر غياب</h2>
+               <p className="text-blue-200 text-xs md:text-sm font-medium opacity-90">نموذج رسمي - متوسطة عماد الدين زنكي</p>
             </div>
             <div className="bg-white/10 p-2 rounded-lg backdrop-blur-md border border-white/20">
                <Sparkles className="text-amber-400" size={24} />
@@ -218,10 +240,10 @@ const Submission: React.FC = () => {
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500 opacity-10 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl pointer-events-none"></div>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-8">
+        <form onSubmit={handleSubmit} className="p-5 md:p-10 space-y-6 md:space-y-8">
           
           {/* Selection Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <div>
               <label className={labelClasses}>الصف الدراسي</label>
               <select 
@@ -275,21 +297,21 @@ const Submission: React.FC = () => {
           {/* Student ID Info Alert */}
           {selectedStudent && (
             <div className="space-y-4 animate-fade-in">
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between shadow-sm relative overflow-hidden gap-4">
                 <div className="absolute right-0 top-0 w-1 h-full bg-blue-900"></div>
-                <div className="flex items-center gap-5">
-                  <div className="bg-white p-3 rounded-full text-blue-900 shadow-sm border border-blue-100">
+                <div className="flex items-center gap-4 md:gap-5">
+                  <div className="bg-white p-3 rounded-full text-blue-900 shadow-sm border border-blue-100 shrink-0">
                     <Info size={24} />
                   </div>
                   <div>
                     <p className="text-xs text-blue-800 font-bold mb-1 opacity-80">رقم الطالب (السجل المدني)</p>
-                    <p className="text-2xl font-bold text-slate-900 font-mono tracking-wider">{selectedStudent.studentId}</p>
+                    <p className="text-xl md:text-2xl font-bold text-slate-900 font-mono tracking-wider">{selectedStudent.studentId}</p>
                   </div>
                 </div>
                 <button 
                   type="button"
                   onClick={() => copyToClipboard(selectedStudent.studentId)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg transition-all font-bold text-sm shadow-sm
+                  className={`w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 md:py-2.5 rounded-lg transition-all font-bold text-sm shadow-sm
                     ${copied 
                       ? 'bg-emerald-600 text-white border border-emerald-600' 
                       : 'bg-white text-blue-900 border border-blue-200 hover:bg-blue-50'
@@ -326,7 +348,7 @@ const Submission: React.FC = () => {
           <div className="border-t border-slate-100 pt-2"></div>
 
           {/* Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
              <div>
               <label className={labelClasses}>تاريخ الغياب</label>
               <input 
@@ -376,23 +398,22 @@ const Submission: React.FC = () => {
             <label className={labelClasses}>
               المرفقات (تقرير طبي / إثبات) <span className="text-red-500">*</span>
             </label>
-            <div className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${file ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 bg-slate-50'}`}>
+            <div className={`border-2 border-dashed rounded-xl p-6 md:p-8 text-center cursor-pointer transition-colors ${file ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 bg-slate-50'}`}>
               <input 
                 type="file" 
                 id="file-upload"
                 required
+                accept=".jpg,.jpeg,.png,.pdf"
                 className="hidden"
-                onChange={(e) => {
-                   if (e.target.files && e.target.files[0]) setFile(e.target.files[0]);
-                }}
+                onChange={handleFileChange}
               />
-              <label htmlFor="file-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
+              <label htmlFor="file-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center touch-manipulation">
                 {file ? (
                   <>
                     <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3">
                        <CheckCircle size={24} />
                     </div>
-                    <span className="text-emerald-800 font-bold text-lg">{file.name}</span>
+                    <span className="text-emerald-800 font-bold text-lg break-all">{file.name}</span>
                     <span className="text-xs text-emerald-600 mt-2 font-medium bg-white px-3 py-1 rounded-full border border-emerald-100">اضغط للتغيير</span>
                   </>
                 ) : (
@@ -411,7 +432,7 @@ const Submission: React.FC = () => {
           <button 
             type="submit" 
             disabled={loading}
-            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-blue-900/10 transition-all mt-4
+            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-blue-900/10 transition-all mt-4 active:scale-95
               ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 hover:shadow-xl hover:-translate-y-1'}
             `}
           >

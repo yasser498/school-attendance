@@ -251,9 +251,13 @@ const Students: React.FC = () => {
             alert("تمت العملية بنجاح!");
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        alert("حدث خطأ غير متوقع أثناء معالجة الملف. تأكد من أن الملف بصيغة Excel (.xlsx, .xls) سليمة.");
+        if (error.message.includes("permission-denied")) {
+           alert("خطأ في الصلاحيات! لا يمكن حفظ البيانات في قاعدة البيانات. تأكد من إعدادات Firestore Rules في Firebase Console.");
+        } else {
+           alert("حدث خطأ غير متوقع أثناء معالجة الملف. تأكد من أن الملف بصيغة Excel (.xlsx, .xls) سليمة.");
+        }
     } finally {
         setProcessingFile(false);
         e.target.value = ''; // Reset input

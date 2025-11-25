@@ -20,8 +20,9 @@ const COLL_STAFF = 'staff';
 const COLL_ATTENDANCE = 'attendance';
 
 // --- Caching System ---
+// Simple in-memory cache to prevent redundant fetches
 const CACHE: Record<string, { data: any, timestamp: number }> = {};
-const CACHE_TTL = 30 * 60 * 1000; // 30 Minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 Minutes Cache
 
 // Helper to get data synchronously (Instant Load)
 export const getFromCache = <T>(key: string): T | null => {
@@ -40,29 +41,38 @@ export const invalidateCache = (key: string) => {
   delete CACHE[key];
 };
 
+// Helper for delay to prevent rate limiting/blocking
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // --- Students ---
 
 export const getStudentsSync = (): Student[] | null => getFromCache<Student[]>('students');
 
 export const getStudents = async (forceRefresh = false): Promise<Student[]> => {
+  // 1. Try Cache First
   if (!forceRefresh) {
     const cached = getFromCache<Student[]>('students');
     if (cached) return cached;
   }
 
   try {
+    // 2. Fetch from Firebase
     const snapshot = await getDocs(collection(db, COLL_STUDENTS));
     const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
+    
+    // 3. Update Cache
     setCache('students', data);
     return data;
   } catch (error) {
     console.error("Error fetching students:", error);
+    // Return empty array instead of crashing, but log error
     return [];
   }
 };
 
 export const getStudentByCivilId = async (civilId: string): Promise<Student | null> => {
   try {
+    // Optimized: Query only 1 document
     const q = query(collection(db, COLL_STUDENTS), where("studentId", "==", civilId), limit(1));
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
@@ -74,7 +84,20 @@ export const getStudentByCivilId = async (civilId: string): Promise<Student | nu
   }
 };
 
-// Optimized Single Add
+// Helper to get Distinct Classes dynamically from Students Data
+export const getAvailableClassesForGrade = async (grade: string): Promise<string[]> => {
+  const students = await getStudents(); // Uses cache if available
+  const classes = new Set<string>();
+  
+  students.forEach(s => {
+    if (s.grade === grade && s.className) {
+      classes.add(s.className);
+    }
+  });
+  
+  return Array.from(classes).sort();
+};
+
 export const addStudent = async (student: Student): Promise<Student> => {
   const { id, ...data } = student;
   const docRef = await addDoc(collection(db, COLL_STUDENTS), data);
@@ -89,7 +112,6 @@ export const addStudent = async (student: Student): Promise<Student> => {
   return newStudent;
 };
 
-// Optimized Single Delete
 export const deleteStudent = async (id: string) => {
   await deleteDoc(doc(db, COLL_STUDENTS, id));
   
@@ -100,53 +122,92 @@ export const deleteStudent = async (id: string) => {
   }
 };
 
-// Batch Sync (For Excel Uploads)
+// Batch Sync (For Excel Uploads) - Optimized for Reliability & Anti-Blocking
 export const syncStudentsBatch = async (
   toAdd: Student[], 
   toUpdate: Student[], 
   toDeleteIds: string[]
 ) => {
-  const BATCH_SIZE = 250;
+  // Firebase limits batches to 500 operations. 
+  // We use 150 to be extremely safe against browser throttling and network blocking.
+  const BATCH_SIZE = 150;
 
   const processChunk = async (operations: any[], type: 'add' | 'update' | 'delete') => {
+    let successCount = 0;
+    
     for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+      // Add delay between batches to prevent "ERR_BLOCKED_BY_CLIENT"
+      if (i > 0) {
+        await delay(500); // Wait 500ms
+      }
+
       const chunk = operations.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       
       chunk.forEach(item => {
-        if (type === 'add') {
-          const s = item as Student;
-          const ref = doc(collection(db, COLL_STUDENTS));
-          batch.set(ref, { ...s, id: ref.id });
-        } else if (type === 'update') {
-          const s = item as Student;
-          const ref = doc(db, COLL_STUDENTS, s.id);
-          batch.update(ref, { ...s });
-        } else if (type === 'delete') {
-          const id = item as string;
-          const ref = doc(db, COLL_STUDENTS, id);
-          batch.delete(ref);
+        try {
+          if (type === 'add') {
+            const s = item as Student;
+            const ref = doc(collection(db, COLL_STUDENTS));
+            batch.set(ref, { 
+              name: s.name || '',
+              studentId: s.studentId || '',
+              grade: s.grade || '',
+              className: s.className || '',
+              phone: s.phone || '',
+              id: ref.id
+            });
+          } else if (type === 'update') {
+            const s = item as Student;
+            const ref = doc(db, COLL_STUDENTS, s.id);
+            batch.update(ref, { 
+               name: s.name,
+               studentId: s.studentId,
+               grade: s.grade,
+               className: s.className,
+               phone: s.phone
+            });
+          } else if (type === 'delete') {
+            const id = item as string;
+            const ref = doc(db, COLL_STUDENTS, id);
+            batch.delete(ref);
+          }
+        } catch (err) {
+          console.error(`Error preparing batch for ${type}:`, err);
         }
       });
 
-      await batch.commit();
+      try {
+        await batch.commit();
+        successCount += chunk.length;
+        console.log(`Successfully processed batch of ${chunk.length} ${type} operations.`);
+      } catch (error: any) {
+        console.error("Batch commit failed:", error);
+        // If permission denied, throw immediately
+        if (error.code === 'permission-denied') {
+          throw new Error("لا تملك صلاحية الحفظ. تأكد من إعدادات Firestore Rules.");
+        }
+        // Otherwise continue to next batch (best effort)
+      }
     }
   };
 
-  await processChunk(toAdd, 'add');
-  await processChunk(toUpdate, 'update');
-  await processChunk(toDeleteIds, 'delete');
+  // Run sequentially
+  if (toAdd.length > 0) await processChunk(toAdd, 'add');
+  if (toUpdate.length > 0) await processChunk(toUpdate, 'update');
+  if (toDeleteIds.length > 0) await processChunk(toDeleteIds, 'delete');
 
-  // Invalidate cache for bulk operations as complex merging is risky
+  // Invalidate cache so next fetch gets fresh data
   invalidateCache('students'); 
 };
 
 export const clearStudents = async () => {
   const snapshot = await getDocs(collection(db, COLL_STUDENTS));
-  const BATCH_SIZE = 250;
+  const BATCH_SIZE = 150; // Safer batch size
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    if (i > 0) await delay(300);
     const chunk = docs.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
     chunk.forEach((d) => batch.delete(d.ref));
@@ -169,6 +230,7 @@ export const getRequests = async (forceRefresh = false): Promise<ExcuseRequest[]
   try {
     const snapshot = await getDocs(collection(db, COLL_REQUESTS));
     const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ExcuseRequest));
+    // Sort client-side to reduce index requirements
     const sorted = data.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
     setCache('requests', sorted);
     return sorted;
@@ -179,21 +241,17 @@ export const getRequests = async (forceRefresh = false): Promise<ExcuseRequest[]
 };
 
 export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseRequest[]> => {
-  // Try to find in cache first for speed
+  // Try cache first
   const cached = getFromCache<ExcuseRequest[]>('requests');
   if (cached) {
     return cached.filter(r => r.studentId === studentId);
   }
   
-  try {
-    const q = query(collection(db, COLL_REQUESTS), where("studentId", "==", studentId));
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ExcuseRequest));
-    return data.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
-  } catch (error) {
-    console.error("Error fetching requests by student:", error);
-    return [];
-  }
+  // Fallback to direct query
+  const q = query(collection(db, COLL_REQUESTS), where("studentId", "==", studentId));
+  const snapshot = await getDocs(q);
+  const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ExcuseRequest));
+  return data.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
 };
 
 export const addRequest = async (req: ExcuseRequest) => {
@@ -201,12 +259,11 @@ export const addRequest = async (req: ExcuseRequest) => {
   const docRef = await addDoc(collection(db, COLL_REQUESTS), data);
   const newReq = { ...req, id: docRef.id };
   
-  // Optimistic Cache Update
+  // Update Cache
   const cached = getFromCache<ExcuseRequest[]>('requests');
   if (cached) {
     setCache('requests', [newReq, ...cached]);
   } else {
-    // If no cache, allow next fetch to populate
     invalidateCache('requests');
   }
 };
@@ -215,7 +272,6 @@ export const updateRequestStatus = async (id: string, status: RequestStatus) => 
   const ref = doc(db, COLL_REQUESTS, id);
   await updateDoc(ref, { status });
   
-  // Optimistic Cache Update
   const cached = getFromCache<ExcuseRequest[]>('requests');
   if (cached) {
     const updated = cached.map(r => r.id === id ? { ...r, status } : r);
@@ -225,10 +281,11 @@ export const updateRequestStatus = async (id: string, status: RequestStatus) => 
 
 export const clearRequests = async () => {
   const snapshot = await getDocs(collection(db, COLL_REQUESTS));
-  const BATCH_SIZE = 250;
+  const BATCH_SIZE = 150;
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    if (i > 0) await delay(300);
     const chunk = docs.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
     chunk.forEach((d) => batch.delete(d.ref));
@@ -254,7 +311,7 @@ export const getStaffUsers = async (forceRefresh = false): Promise<StaffUser[]> 
 
 export const addStaffUser = async (user: StaffUser) => {
   const { id, ...data } = user;
-  const docRef = await addDoc(collection(db, COLL_STAFF), data);
+  await addDoc(collection(db, COLL_STAFF), data);
   invalidateCache('staff');
 };
 
@@ -264,7 +321,8 @@ export const deleteStaffUser = async (id: string) => {
 };
 
 export const authenticateStaff = async (passcode: string): Promise<StaffUser | null> => {
-  const q = query(collection(db, COLL_STAFF), where("passcode", "==", passcode));
+  // Query only needed fields to be faster
+  const q = query(collection(db, COLL_STAFF), where("passcode", "==", passcode), limit(1));
   const snapshot = await getDocs(q);
   if (!snapshot.empty) {
     const d = snapshot.docs[0];
@@ -290,11 +348,13 @@ export const getAttendanceRecords = async (forceRefresh = false): Promise<Attend
 };
 
 export const saveAttendanceRecord = async (record: AttendanceRecord) => {
+  // Check if record exists for this date/grade/class
   const q = query(
     collection(db, COLL_ATTENDANCE), 
     where("date", "==", record.date),
     where("grade", "==", record.grade),
-    where("className", "==", record.className)
+    where("className", "==", record.className),
+    limit(1)
   );
   
   const snapshot = await getDocs(q);
@@ -305,17 +365,17 @@ export const saveAttendanceRecord = async (record: AttendanceRecord) => {
   } else {
     const { id, ...data } = record;
     const docRef = await addDoc(collection(db, COLL_ATTENDANCE), data);
-    await updateDoc(docRef, { id: docRef.id });
   }
   invalidateCache('attendance');
 };
 
 export const clearAttendance = async () => {
   const snapshot = await getDocs(collection(db, COLL_ATTENDANCE));
-  const BATCH_SIZE = 250;
+  const BATCH_SIZE = 150;
   const docs = snapshot.docs;
 
   for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    if (i > 0) await delay(300);
     const chunk = docs.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
     chunk.forEach((d) => batch.delete(d.ref));
@@ -328,6 +388,7 @@ export const clearAttendance = async () => {
 
 export const getStudentAttendanceHistory = async (studentId: string, grade: string, className: string): Promise<{ date: string, status: AttendanceStatus }[]> => {
   try {
+    // Only fetch records for the student's specific class to reduce read costs
     const q = query(
       collection(db, COLL_ATTENDANCE), 
       where("grade", "==", grade), 

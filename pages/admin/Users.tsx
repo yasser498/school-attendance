@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2 } from 'lucide-react';
-import { getStaffUsersSync, getStaffUsers, addStaffUser, deleteStaffUser } from '../../services/storage';
+import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2, RefreshCw } from 'lucide-react';
+import { getStaffUsersSync, getStaffUsers, addStaffUser, deleteStaffUser, getAvailableClassesForGrade } from '../../services/storage';
 import { StaffUser, ClassAssignment } from '../../types';
-import { GRADES, CLASSES } from '../../constants';
+import { GRADES } from '../../constants';
 
 const Users: React.FC = () => {
   // Use synchronous getter for instant load if available
@@ -19,6 +19,8 @@ const Users: React.FC = () => {
   
   // Assignment State
   const [selectedGrade, setSelectedGrade] = useState('');
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedClassesForGrade, setSelectedClassesForGrade] = useState<string[]>([]);
   const [assignments, setAssignments] = useState<ClassAssignment[]>([]);
 
@@ -38,6 +40,28 @@ const Users: React.FC = () => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Fetch classes dynamically when grade changes
+  useEffect(() => {
+    if (!selectedGrade) {
+      setAvailableClasses([]);
+      return;
+    }
+
+    const loadClasses = async () => {
+      setLoadingClasses(true);
+      try {
+        const classes = await getAvailableClassesForGrade(selectedGrade);
+        setAvailableClasses(classes);
+      } catch (e) {
+        console.error("Failed to load classes", e);
+      } finally {
+        setLoadingClasses(false);
+      }
+    };
+    loadClasses();
+  }, [selectedGrade]);
+
 
   const handleToggleClass = (className: string) => {
     if (selectedClassesForGrade.includes(className)) {
@@ -261,28 +285,38 @@ const Users: React.FC = () => {
                        {selectedGrade && (
                          <div className="animate-fade-in">
                             <label className={labelClasses}>2. حدد الفصول (الشعب)</label>
-                            {/* Static Classes Checklist */}
-                            <div className="flex flex-wrap gap-3 mt-2">
-                                {CLASSES.map(cls => {
-                                    const isSelected = selectedClassesForGrade.includes(cls);
-                                    return (
-                                        <button
-                                            key={cls}
-                                            type="button"
-                                            onClick={() => handleToggleClass(cls)}
-                                            className={`
-                                            flex items-center gap-2 px-4 py-2 rounded-lg border transition-all
-                                            ${isSelected 
-                                                ? 'bg-blue-900 text-white border-blue-900 shadow-md' 
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}
-                                            `}
-                                        >
-                                            {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                                            <span className="font-bold">{cls}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            
+                            {loadingClasses ? (
+                                <div className="text-sm text-slate-500 flex items-center gap-2 p-2">
+                                    <Loader2 className="animate-spin" size={14} /> جاري جلب الفصول المتاحة...
+                                </div>
+                            ) : availableClasses.length > 0 ? (
+                                <div className="flex flex-wrap gap-3 mt-2">
+                                    {availableClasses.map(cls => {
+                                        const isSelected = selectedClassesForGrade.includes(cls);
+                                        return (
+                                            <button
+                                                key={cls}
+                                                type="button"
+                                                onClick={() => handleToggleClass(cls)}
+                                                className={`
+                                                flex items-center gap-2 px-4 py-2 rounded-lg border transition-all
+                                                ${isSelected 
+                                                    ? 'bg-blue-900 text-white border-blue-900 shadow-md' 
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}
+                                                `}
+                                            >
+                                                {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                                                <span className="font-bold">{cls}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="bg-amber-50 text-amber-600 text-xs p-3 rounded-lg border border-amber-100">
+                                    تنبيه: لا يوجد طلاب مسجلين في هذا الصف حتى الآن، لذلك لا تظهر أي فصول. قم بإضافة طلاب أولاً.
+                                </div>
+                            )}
 
                             <div className="mt-4 text-left">
                                <button 

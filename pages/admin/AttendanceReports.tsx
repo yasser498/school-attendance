@@ -25,6 +25,12 @@ const AttendanceReports: React.FC = () => {
   const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
   const SCHOOL_LOGO = localStorage.getItem('school_logo') || "https://www.raed.net/img?id=1471924";
 
+  // Get Day Name
+  const getDayName = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('ar-SA', { weekday: 'long' });
+  };
+
   // Fetch report when date changes
   useEffect(() => {
     const fetchReport = async () => {
@@ -50,7 +56,10 @@ const AttendanceReports: React.FC = () => {
     if (!reportData) return;
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+      if (!key) throw new Error("API Key Missing");
+
+      const ai = new GoogleGenAI({ apiKey: key });
       
       const stats = JSON.stringify({
         date: selectedDate,
@@ -75,13 +84,13 @@ const AttendanceReports: React.FC = () => {
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
 
       setAiAnalysis(response.text.trim());
     } catch (error) {
-      setAiAnalysis("حدث خطأ أثناء الاتصال بالمحلل الذكي.");
+      setAiAnalysis("حدث خطأ أثناء الاتصال بالمحلل الذكي. يرجى التأكد من المفتاح.");
     } finally {
       setIsGenerating(false);
     }
@@ -105,54 +114,89 @@ const AttendanceReports: React.FC = () => {
       <style>
         {`
           @media print {
-            body * { visibility: hidden; }
-            #daily-report-print, #daily-report-print * { visibility: visible; }
-            #daily-report-print { position: absolute; left: 0; top: 0; width: 100%; background: white; z-index: 9999; padding: 20px; }
+            #daily-report-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; z-index: 9999; padding: 20px; }
             .no-print { display: none !important; }
           }
         `}
       </style>
 
-      {/* Print View */}
-      <div id="daily-report-print" className="hidden">
-         <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
-            {SCHOOL_LOGO && <img src={SCHOOL_LOGO} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />}
-            <h1 className="text-2xl font-bold">تقرير الغياب اليومي</h1>
-            <h2 className="text-lg">{SCHOOL_NAME}</h2>
-            <p className="text-sm mt-2">التاريخ: {selectedDate}</p>
+      {/* Print View - Improved styling for visibility */}
+      <div id="daily-report-print" className="hidden bg-white text-black p-8">
+         {/* Header */}
+         <div className="flex justify-between items-start border-b-4 border-blue-900 pb-6 mb-8">
+            <div className="flex items-center gap-4">
+               {SCHOOL_LOGO && <img src={SCHOOL_LOGO} alt="Logo" className="w-24 h-24 object-contain" />}
+               <div>
+                  <h1 className="text-3xl font-bold text-blue-900 mb-2">تقرير الغياب والتأخر اليومي</h1>
+                  <div className="flex items-center gap-2 text-xl text-amber-600 font-bold">
+                     <span>{getDayName(selectedDate)}</span>
+                     <span className="text-slate-400">|</span>
+                     <span className="dir-ltr">{selectedDate}</span>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-1">{SCHOOL_NAME}</p>
+               </div>
+            </div>
          </div>
-         <div className="grid grid-cols-3 gap-4 mb-8 text-center">
-            <div className="border p-4 rounded bg-emerald-50">حضور: {reportData.totalPresent}</div>
-            <div className="border p-4 rounded bg-red-50">غياب: {reportData.totalAbsent}</div>
-            <div className="border p-4 rounded bg-amber-50">تأخر: {reportData.totalLate}</div>
+
+         {/* Dashboard Summary Stats */}
+         <div className="grid grid-cols-3 gap-6 mb-8">
+            <div className="border-2 border-emerald-200 bg-emerald-50 p-6 rounded-xl text-center">
+               <div className="text-sm font-bold text-emerald-800 mb-1 uppercase">حضور</div>
+               <div className="text-5xl font-bold text-emerald-900">{reportData.totalPresent}</div>
+            </div>
+            <div className="border-2 border-red-200 bg-red-50 p-6 rounded-xl text-center">
+               <div className="text-sm font-bold text-red-800 mb-1 uppercase">غياب</div>
+               <div className="text-5xl font-bold text-red-900">{reportData.totalAbsent}</div>
+            </div>
+            <div className="border-2 border-amber-200 bg-amber-50 p-6 rounded-xl text-center">
+               <div className="text-sm font-bold text-amber-800 mb-1 uppercase">تأخر</div>
+               <div className="text-5xl font-bold text-amber-900">{reportData.totalLate}</div>
+            </div>
          </div>
-         <table className="w-full text-right border-collapse border border-slate-300">
+
+         {/* Table */}
+         <h3 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">التفاصيل حسب الطلاب</h3>
+         <table className="w-full text-right border-collapse border border-slate-300 text-sm">
             <thead>
-               <tr className="bg-slate-100">
-                  <th className="border p-2">الطالب</th>
-                  <th className="border p-2">الصف</th>
-                  <th className="border p-2">الفصل</th>
-                  <th className="border p-2">الحالة</th>
+               <tr className="bg-slate-100 text-slate-900">
+                  <th className="border border-slate-300 p-3">م</th>
+                  <th className="border border-slate-300 p-3">الطالب</th>
+                  <th className="border border-slate-300 p-3">الصف</th>
+                  <th className="border border-slate-300 p-3">الفصل</th>
+                  <th className="border border-slate-300 p-3">الحالة</th>
                </tr>
             </thead>
             <tbody>
                {reportData.details.map((d, idx) => (
                   <tr key={idx}>
-                     <td className="border p-2">{d.studentName}</td>
-                     <td className="border p-2">{d.grade}</td>
-                     <td className="border p-2">{d.className}</td>
-                     <td className="border p-2">{d.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}</td>
+                     <td className="border border-slate-300 p-3 text-center w-12">{idx + 1}</td>
+                     <td className="border border-slate-300 p-3 font-bold">{d.studentName}</td>
+                     <td className="border border-slate-300 p-3">{d.grade}</td>
+                     <td className="border border-slate-300 p-3">{d.className}</td>
+                     <td className="border border-slate-300 p-3 text-center font-bold">
+                        {d.status === AttendanceStatus.ABSENT ? (
+                            <span className="text-red-700">غياب</span>
+                        ) : (
+                            <span className="text-amber-700">تأخر</span>
+                        )}
+                     </td>
                   </tr>
                ))}
                {reportData.details.length === 0 && (
-                  <tr><td colSpan={4} className="border p-4 text-center">الجميع حاضرون (ما شاء الله)</td></tr>
+                  <tr><td colSpan={5} className="border border-slate-300 p-6 text-center font-bold text-lg text-emerald-700">جميع الطلاب حاضرون (سجل نظيف)</td></tr>
                )}
             </tbody>
          </table>
+         
+         {/* Footer */}
+         <div className="mt-12 pt-8 border-t border-slate-200 flex justify-between text-sm text-slate-500">
+            <div>توقيع وكيل شؤون الطلاب: ..............................</div>
+            <div>توقيع مدير المدرسة: ..............................</div>
+         </div>
       </div>
 
       {/* Screen View */}
-      <div className="space-y-8 pb-12 animate-fade-in">
+      <div className="space-y-8 pb-12 animate-fade-in no-print">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div>
             <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
@@ -171,7 +215,7 @@ const AttendanceReports: React.FC = () => {
                 />
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
              </div>
-             <button onClick={handlePrint} className="bg-slate-800 text-white p-2.5 rounded-xl hover:bg-slate-700 transition-colors">
+             <button onClick={handlePrint} className="bg-slate-800 text-white p-2.5 rounded-xl hover:bg-slate-700 transition-colors" title="طباعة التقرير">
                 <Printer size={20} />
              </button>
           </div>

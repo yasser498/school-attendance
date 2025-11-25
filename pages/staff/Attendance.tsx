@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, CheckCircle, Clock, XCircle, Save, Check, School, Users, ListChecks, ChevronDown, Loader2 } from 'lucide-react';
-import { getStudents, saveAttendanceRecord } from '../../services/storage';
+import { getStudents, saveAttendanceRecord, getAttendanceRecordForClass } from '../../services/storage';
 import { Student, StaffUser, AttendanceStatus, AttendanceRecord, ClassAssignment } from '../../types';
 
 const Attendance: React.FC = () => {
@@ -15,6 +15,7 @@ const Attendance: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     const session = localStorage.getItem('ozr_staff_session');
@@ -32,24 +33,39 @@ const Attendance: React.FC = () => {
 
   }, [navigate]);
 
-  // Fetch students immediately when assignment changes
+  // Fetch students AND existing attendance when assignment or date changes
   useEffect(() => {
     if (!currentUser || !currentAssignment) return;
 
-    const fetchStudents = async () => {
+    const fetchStudentsAndAttendance = async () => {
       setLoadingStudents(true);
       try {
+        // 1. Get Students for this class
         const allStudents = await getStudents();
         const classStudents = allStudents.filter(s => 
           s.grade === currentAssignment.grade && s.className === currentAssignment.className
         );
         setStudents(classStudents);
 
-        // Initialize map for new students list
+        // 2. Check if attendance is already recorded for this day/class
+        const existingRecord = await getAttendanceRecordForClass(selectedDate, currentAssignment.grade, currentAssignment.className);
+        
         const initialMap: Record<string, AttendanceStatus> = {};
-        classStudents.forEach(s => initialMap[s.id] = AttendanceStatus.PRESENT);
+        
+        if (existingRecord) {
+           // Populate map from existing DB record
+           classStudents.forEach(s => {
+              const record = existingRecord.records.find(r => r.studentId === s.studentId);
+              initialMap[s.id] = record ? record.status : AttendanceStatus.PRESENT;
+           });
+           setSaved(true); // Indicate data exists
+        } else {
+           // Default to Present
+           classStudents.forEach(s => initialMap[s.id] = AttendanceStatus.PRESENT);
+           setSaved(false);
+        }
+        
         setAttendanceMap(initialMap);
-        setSaved(false);
       } catch (error) {
         console.error("Failed to load students", error);
       } finally {
@@ -57,8 +73,8 @@ const Attendance: React.FC = () => {
       }
     };
 
-    fetchStudents();
-  }, [currentUser, currentAssignment]);
+    fetchStudentsAndAttendance();
+  }, [currentUser, currentAssignment, selectedDate]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     setAttendanceMap(prev => ({ ...prev, [studentId]: status }));
@@ -80,8 +96,8 @@ const Attendance: React.FC = () => {
     setSaving(true);
     try {
       const record: AttendanceRecord = {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
+        id: '', // ID handled by storage logic (Insert/Update)
+        date: selectedDate,
         grade: currentAssignment.grade,
         className: currentAssignment.className,
         staffId: currentUser.id,
@@ -94,7 +110,7 @@ const Attendance: React.FC = () => {
 
       await saveAttendanceRecord(record);
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      // Remove timeout for "Saved" state so user knows data is safe
     } catch (e) {
       alert("حدث خطأ أثناء الحفظ. يرجى التحقق من الاتصال.");
     } finally {
@@ -123,10 +139,17 @@ const Attendance: React.FC = () => {
               <span className="bg-amber-100 text-amber-700 p-2 rounded-lg"><ListChecks size={24} /></span>
               <span className="text-blue-900">أهلاً، {currentUser.name}</span>
             </h1>
-            <p className="text-slate-500 mt-1 flex items-center gap-2 text-sm">
-              <Calendar size={16} />
-              <span>{new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-            </p>
+            
+            {/* Date Picker */}
+            <div className="mt-3 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg w-fit border border-slate-200">
+               <Calendar size={16} className="text-slate-400" />
+               <input 
+                 type="date" 
+                 value={selectedDate}
+                 onChange={(e) => setSelectedDate(e.target.value)}
+                 className="bg-transparent border-none outline-none text-sm font-bold text-slate-700"
+               />
+            </div>
           </div>
 
           {/* Class Selector */}
@@ -185,7 +208,7 @@ const Attendance: React.FC = () => {
       {loadingStudents ? (
          <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
              <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
-             <p className="font-bold">جاري جلب بيانات الطلاب...</p>
+             <p className="font-bold">جاري جلب بيانات الطلاب والحضور...</p>
          </div>
       ) : students.length === 0 ? (
          <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">

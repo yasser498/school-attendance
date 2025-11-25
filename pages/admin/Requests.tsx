@@ -356,14 +356,18 @@ const Requests: React.FC = () => {
                     <div>
                        <h4 className="font-bold text-slate-800 mb-3 text-sm">المرفقات والإثباتات</h4>
                        {selectedReq.attachmentName ? (
-                          <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors group cursor-pointer">
+                          <div 
+                             onClick={() => selectedReq.attachmentUrl && window.open(selectedReq.attachmentUrl, '_blank')}
+                             className={`flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 transition-colors group ${selectedReq.attachmentUrl ? 'cursor-pointer hover:bg-slate-100' : 'opacity-50'}`}
+                             title={selectedReq.attachmentUrl ? 'اضغط للمعاينة' : 'لا يوجد رابط للملف'}
+                          >
                              <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 shadow-sm text-red-500">
                                    <FileText size={20} />
                                 </div>
                                 <div>
                                    <p className="text-sm font-bold text-slate-700 group-hover:text-blue-900 transition-colors">{selectedReq.attachmentName}</p>
-                                   <p className="text-xs text-slate-400">انقر للمعاينة</p>
+                                   <p className="text-xs text-slate-400">{selectedReq.attachmentUrl ? 'انقر للمعاينة' : 'الملف غير متوفر'}</p>
                                 </div>
                              </div>
                           </div>

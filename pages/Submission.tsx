@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
-import { getStudents, addRequest } from '../services/storage';
+import { getStudents, addRequest, uploadFile } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
-import { GRADES, CLASSES } from '../constants';
+import { GRADES } from '../constants';
 
 const Submission: React.FC = () => {
   const navigate = useNavigate();
@@ -27,14 +27,24 @@ const Submission: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // getStudents handles caching automatically. 
-      // This will be instant if students were loaded previously.
       const data = await getStudents();
       setStudents(data);
       setDataLoading(false);
     };
     fetchData();
   }, []);
+
+  // Instant Class Loading using Memoization (Fixes lag/empty list)
+  const availableClasses = useMemo(() => {
+    if (!selectedGrade) return [];
+    // Extract distinct classes for the selected grade
+    const classes = new Set(
+        students
+        .filter(s => s.grade === selectedGrade && s.className)
+        .map(s => s.className)
+    );
+    return Array.from(classes).sort();
+  }, [students, selectedGrade]);
 
   // Filtered Students based on selection
   const availableStudents = useMemo(() => {
@@ -47,9 +57,9 @@ const Submission: React.FC = () => {
     return students.find(s => s.id === selectedStudentId);
   }, [students, selectedStudentId]);
 
-  // Auto-fill from URL parameters (e.g., coming from Inquiry page)
+  // Auto-fill from URL parameters
   useEffect(() => {
-    if (dataLoading) return; // Wait for students to load
+    if (dataLoading) return;
 
     const urlStudentId = searchParams.get('studentId'); 
     const urlDate = searchParams.get('date');
@@ -72,11 +82,47 @@ const Submission: React.FC = () => {
     e.preventDefault();
     if (!selectedStudentId || !reason || !date || !file) return;
 
+    // Strict Validation
+    const d = new Date(date);
+    const day = d.getDay(); // 0=Sun... 5=Fri, 6=Sat
+    
+    if (day === 5 || day === 6) {
+        alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
+        return;
+    }
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const selectedDateObj = new Date(date);
+    selectedDateObj.setHours(0,0,0,0);
+
+    const diffTime = today.getTime() - selectedDateObj.getTime();
+    const diffDays = diffTime / (1000 * 3600 * 24);
+
+    if (selectedDateObj > today) {
+        alert("لا يمكن اختيار تاريخ مستقبلي.");
+        return;
+    }
+
+    if (diffDays > 7) {
+        alert("عفواً، لا يمكن تقديم عذر لغياب مضى عليه أكثر من 7 أيام.");
+        return;
+    }
+
     setLoading(true);
 
     try {
       const student = students.find(s => s.id === selectedStudentId);
       if (student) {
+        // Upload File
+        const attachmentUrl = await uploadFile(file);
+
+        if (!attachmentUrl) {
+            alert("فشل رفع المرفق. يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.");
+            setLoading(false);
+            return;
+        }
+
         const newRequest: ExcuseRequest = {
           id: '', // Firestore will generate
           studentId: student.studentId,
@@ -87,6 +133,7 @@ const Submission: React.FC = () => {
           reason,
           details,
           attachmentName: file.name,
+          attachmentUrl: attachmentUrl, // Use the returned URL
           status: RequestStatus.PENDING,
           submissionDate: new Date().toISOString(),
         };
@@ -94,6 +141,7 @@ const Submission: React.FC = () => {
         setStep(2); // Success Step
       }
     } catch (e) {
+      console.error(e);
       alert("حدث خطأ أثناء الإرسال. يرجى المحاولة مرة أخرى.");
     } finally {
       setLoading(false);
@@ -106,7 +154,12 @@ const Submission: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  // Date Logic (Past 7 days only)
+  const today = new Date();
+  const maxDate = today.toISOString().split('T')[0];
+  const minDateObj = new Date();
+  minDateObj.setDate(today.getDate() - 7);
+  const minDate = minDateObj.toISOString().split('T')[0];
 
   const inputClasses = "w-full p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400";
   const labelClasses = "block text-sm font-bold text-slate-700 mb-2";
@@ -185,14 +238,14 @@ const Submission: React.FC = () => {
             <div>
               <label className={labelClasses}>الفصل</label>
               <select 
-                required
-                disabled={!selectedGrade}
-                value={selectedClass}
-                onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }}
-                className={`${inputClasses} disabled:bg-slate-50 disabled:text-slate-400`}
+                  required
+                  disabled={!selectedGrade}
+                  value={selectedClass}
+                  onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }}
+                  className={`${inputClasses} disabled:bg-slate-50 disabled:text-slate-400`}
               >
-                <option value="">اختر الفصل...</option>
-                {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">{selectedGrade ? 'اختر الفصل...' : 'اختر الصف أولاً'}</option>
+                  {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
@@ -279,13 +332,14 @@ const Submission: React.FC = () => {
               <input 
                 type="date" 
                 required
-                max={today}
+                min={minDate}
+                max={maxDate}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className={inputClasses}
               />
               <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
-                 <AlertCircle size={12}/> لا يمكن اختيار تاريخ مستقبلي
+                 <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (لا يشمل الجمعة/السبت)
               </p>
             </div>
              <div>

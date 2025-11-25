@@ -57,3 +57,23 @@ select option {
 .animate-fade-in-up {
   animation: fadeInUp 0.5s ease-out forwards;
 }
+
+/* Print Specific Overrides - Fixes empty print pages */
+@media print {
+  body, #root, main, .overflow-hidden, .overflow-y-auto {
+    overflow: visible !important;
+    height: auto !important;
+    position: static !important;
+  }
+  
+  /* Ensure colors are printed */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide non-printable elements */
+  nav, aside, button, .no-print, input[type="date"], input[type="text"], select {
+    display: none !important;
+  }
+}

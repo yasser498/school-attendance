@@ -51,6 +51,7 @@ const mapRequestFromDB = (r: any): ExcuseRequest => ({
   reason: r.reason,
   details: r.details,
   attachmentName: r.attachment_name,
+  attachmentUrl: r.attachment_url, // Added support for URL
   status: r.status as RequestStatus,
   submissionDate: r.submission_date
 });
@@ -64,6 +65,7 @@ const mapRequestToDB = (r: ExcuseRequest) => ({
   reason: r.reason,
   details: r.details,
   attachment_name: r.attachmentName,
+  attachment_url: r.attachmentUrl, // Added support for URL
   status: r.status,
   submission_date: r.submissionDate
 });
@@ -112,6 +114,28 @@ export const testSupabaseConnection = async (): Promise<{ success: boolean; mess
   }
 };
 
+// --- STORAGE ---
+// Function to upload file to Supabase Storage
+export const uploadFile = async (file: File): Promise<string | null> => {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('attachments')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('attachments').getPublicUrl(filePath);
+    return data.publicUrl;
+  } catch (error) {
+    console.error('Upload error:', error);
+    return null;
+  }
+};
+
 // --- STUDENTS ---
 
 export const getStudentsSync = (): Student[] | null => getFromCache<Student[]>('students');
@@ -146,8 +170,7 @@ export const getStudentByCivilId = async (civilId: string): Promise<Student | nu
 };
 
 export const getAvailableClassesForGrade = async (grade: string): Promise<string[]> => {
-  // We can query directly or use the cache.
-  // Using cache is faster for UI responsiveness if data is loaded
+  // Optimized: Use RPC or distinct query if possible, but for now cache filtering is fast enough for small datasets
   const students = await getStudents();
   const classes = new Set<string>();
   students.forEach(s => {
@@ -258,6 +281,33 @@ export const addRequest = async (req: ExcuseRequest) => {
 };
 
 export const updateRequestStatus = async (id: string, status: RequestStatus) => {
+  // If Approved or Rejected, we might want to clean up the file to save storage
+  // But for now, we will keep the URL in DB but maybe delete file from bucket if needed.
+  // Let's implement the cleanup logic requested: Delete file upon decision.
+  
+  if (status === RequestStatus.APPROVED || status === RequestStatus.REJECTED) {
+     // 1. Get the attachment URL first
+     const { data: reqData } = await supabase.from('requests').select('attachment_url').eq('id', id).single();
+     
+     if (reqData?.attachment_url) {
+        // Extract file path from URL. URL format: .../attachments/filename
+        const urlParts = reqData.attachment_url.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        
+        // Delete from Storage
+        await supabase.storage.from('attachments').remove([fileName]);
+        
+        // Update DB to remove URL but keep Name (and mark as deleted)
+        await supabase.from('requests').update({ 
+            status, 
+            attachment_url: null 
+        }).eq('id', id);
+        
+        invalidateCache('requests');
+        return;
+     }
+  }
+
   const { error } = await supabase
     .from('requests')
     .update({ status })
@@ -330,11 +380,21 @@ export const getAttendanceRecords = async (forceRefresh = false): Promise<Attend
   return records;
 };
 
+export const getAttendanceRecordForClass = async (date: string, grade: string, className: string): Promise<AttendanceRecord | null> => {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('*')
+    .eq('date', date)
+    .eq('grade', grade)
+    .eq('class_name', className)
+    .single();
+
+  if (error || !data) return null;
+  return mapAttendanceFromDB(data);
+};
+
 export const saveAttendanceRecord = async (record: AttendanceRecord) => {
   // Logic: Check if record exists for Date + Grade + Class
-  // Supabase UPSERT is perfect here, but requires a unique constraint on (date, grade, class_name)
-  // If you haven't set that constraint in SQL, we do a check first.
-  
   const { data: existing } = await supabase
     .from('attendance')
     .select('id')

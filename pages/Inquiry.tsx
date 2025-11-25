@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, Phone, School, Copy, Check, FileX, CalendarDays, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, User, Phone, School, Copy, Check, FileX, CalendarDays, AlertCircle, ArrowLeft, Loader2, Clock } from 'lucide-react';
 import { getStudentByCivilId, getRequestsByStudentId, getStudentAttendanceHistory } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus, AttendanceStatus } from '../types';
 
@@ -67,6 +67,14 @@ const Inquiry: React.FC = () => {
       case RequestStatus.REJECTED: return 'مرفوض';
       default: return 'قيد المراجعة';
     }
+  };
+
+  const isExcuseExpired = (dateStr: string) => {
+    const absenceDate = new Date(dateStr);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - absenceDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 7; 
   };
 
   return (
@@ -183,6 +191,7 @@ const Inquiry: React.FC = () => {
                      {attendanceHistory.map((record, idx) => {
                         // Check if there is an excuse for this absence
                         const relatedExcuse = history.find(req => req.date === record.date);
+                        const expired = isExcuseExpired(record.date);
                         
                         return (
                            <div key={idx} className="p-5 flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-slate-50 transition-colors">
@@ -211,6 +220,11 @@ const Inquiry: React.FC = () => {
                                     {relatedExcuse ? (
                                        <div className="flex items-center gap-2 text-xs font-bold text-blue-800 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
                                           <Check size={14} /> تم تقديم عذر ({getStatusText(relatedExcuse.status)})
+                                       </div>
+                                    ) : expired ? (
+                                       <div className="flex items-center gap-1.5 bg-slate-100 text-slate-400 px-4 py-2 rounded-lg text-xs font-bold cursor-not-allowed border border-slate-200">
+                                          <Clock size={14} />
+                                          انتهت مهلة التقديم
                                        </div>
                                     ) : (
                                        <button 

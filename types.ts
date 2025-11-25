@@ -23,6 +23,7 @@ export interface ExcuseRequest {
   reason: string;
   details?: string;
   attachmentName?: string;
+  attachmentUrl?: string;
   status: RequestStatus;
   submissionDate: string;
 }

@@ -127,6 +127,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
                 <ClipboardCheck size={20} />
                 <span>رصد الغياب والتأخر</span>
               </Link>
+              <Link to="/staff/reports" className={navLinkClass('/staff/reports')} onClick={() => setIsMobileMenuOpen(false)}>
+                <BarChart2 size={20} />
+                <span>تقاريري</span>
+              </Link>
               <div className="border-t border-slate-100 my-4 shrink-0"></div>
               <button 
                 onClick={onLogout}

@@ -14,6 +14,7 @@ import AttendanceStats from './pages/admin/AttendanceStats'; // New Attendance S
 import StaffLogin from './pages/staff/Login'; // Staff Login
 import Attendance from './pages/staff/Attendance'; // Staff Attendance
 import StaffReports from './pages/staff/Reports'; // Staff Reports
+import StaffRequests from './pages/staff/Requests'; // Staff Requests
 
 // Protected Route for Admin
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -84,6 +85,7 @@ const AppContent = () => {
         {/* Staff Routes */}
         <Route path="/staff/attendance" element={<ProtectedStaffRoute><Attendance /></ProtectedStaffRoute>} />
         <Route path="/staff/reports" element={<ProtectedStaffRoute><StaffReports /></ProtectedStaffRoute>} />
+        <Route path="/staff/requests" element={<ProtectedStaffRoute><StaffRequests /></ProtectedStaffRoute>} />
         
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

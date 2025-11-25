@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, PieChart } from 'lucide-react';
+import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, PieChart, MessageSquare } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -126,6 +126,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
                <Link to="/staff/attendance" className={navLinkClass('/staff/attendance')} onClick={() => setIsMobileMenuOpen(false)}>
                 <ClipboardCheck size={20} />
                 <span>رصد الغياب والتأخر</span>
+              </Link>
+              <Link to="/staff/requests" className={navLinkClass('/staff/requests')} onClick={() => setIsMobileMenuOpen(false)}>
+                <MessageSquare size={20} />
+                <span>طلبات الأعذار</span>
               </Link>
               <Link to="/staff/reports" className={navLinkClass('/staff/reports')} onClick={() => setIsMobileMenuOpen(false)}>
                 <BarChart2 size={20} />

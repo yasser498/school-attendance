@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key, School, Image as ImageIcon, Wifi } from 'lucide-react';
 import StatCard from '../../components/StatCard';
-import { getRequests, getStudents, clearRequests, clearAttendance, clearStudents, testFirebaseConnection } from '../../services/storage';
+import { getRequests, getStudents, clearRequests, clearAttendance, clearStudents, testSupabaseConnection } from '../../services/storage';
 import { RequestStatus, ExcuseRequest, Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 import { GoogleGenAI } from "@google/genai";
@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
   const runConnectionTest = async () => {
     setTestingConnection(true);
     setConnectionTestResult(null);
-    const result = await testFirebaseConnection();
+    const result = await testSupabaseConnection();
     setConnectionTestResult(result);
     setTestingConnection(false);
   };
@@ -750,7 +750,7 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-xl font-bold text-slate-800">فحص اتصال قاعدة البيانات</h2>
-                        <p className="text-slate-500 text-sm">أداة لتشخيص مشاكل الحفظ والاتصال بسيرفرات Firebase</p>
+                        <p className="text-slate-500 text-sm">أداة لتشخيص مشاكل الحفظ والاتصال بسيرفرات Supabase</p>
                     </div>
                 </div>
                 

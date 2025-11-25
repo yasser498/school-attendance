@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Check, X, Eye, Calendar, Filter, MessageCircle, Sparkles, Loader2, Copy, Search, MoreHorizontal, FileText, User, RefreshCw } from 'lucide-react';
 import { getRequests, updateRequestStatus, invalidateCache } from '../../services/storage';
@@ -78,7 +79,7 @@ const Requests: React.FC = () => {
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
 

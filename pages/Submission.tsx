@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
@@ -83,8 +84,8 @@ const Submission: React.FC = () => {
     if (!selectedStudentId || !reason || !date || !file) return;
 
     // Strict Validation
-    const d = new Date(date);
-    const day = d.getDay(); // 0=Sun... 5=Fri, 6=Sat
+    const selectedDateObj = new Date(date);
+    const day = selectedDateObj.getDay(); // 0=Sun... 5=Fri, 6=Sat
     
     if (day === 5 || day === 6) {
         alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
@@ -93,7 +94,6 @@ const Submission: React.FC = () => {
 
     const today = new Date();
     today.setHours(0,0,0,0);
-    const selectedDateObj = new Date(date);
     selectedDateObj.setHours(0,0,0,0);
 
     const diffTime = today.getTime() - selectedDateObj.getTime();
@@ -339,7 +339,7 @@ const Submission: React.FC = () => {
                 className={inputClasses}
               />
               <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
-                 <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (لا يشمل الجمعة/السبت)
+                 <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
               </p>
             </div>
              <div>

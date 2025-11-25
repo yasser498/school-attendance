@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { PieChart as PieChartIcon, TrendingUp, Users, AlertTriangle, Clock, Calendar, Sparkles, Loader2, ArrowUpRight } from 'lucide-react';
@@ -133,7 +134,10 @@ const AttendanceStats: React.FC = () => {
     setAiReport(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+      if (!key) throw new Error("Missing Key");
+
+      const ai = new GoogleGenAI({ apiKey: key });
       
       const dataSummary = JSON.stringify({
         overallAttendanceRate: stats.attendanceRate,
@@ -158,13 +162,13 @@ const AttendanceStats: React.FC = () => {
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
 
       setAiReport(response.text.trim());
     } catch (error) {
-      setAiReport("عذراً، حدث خطأ أثناء التحليل. يرجى المحاولة لاحقاً.");
+      setAiReport("عذراً، حدث خطأ أثناء التحليل. يرجى التأكد من إضافة المفتاح في الإعدادات.");
     } finally {
       setIsGenerating(false);
     }

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Activity, Filter, PieChart as PieChartIcon, Search, Settings, ChevronDown, ChevronUp, Printer, BarChart3, ListFilter, ArrowRight, Users, Settings2, Trash2, Database, Key, School, Image as ImageIcon, Wifi } from 'lucide-react';
@@ -201,7 +202,7 @@ const Dashboard: React.FC = () => {
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
 
@@ -258,7 +259,7 @@ const Dashboard: React.FC = () => {
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
 

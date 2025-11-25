@@ -1,3 +1,4 @@
+
 /* Global Styles */
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;500;600;700;800&display=swap');
 
@@ -75,5 +76,11 @@ select option {
   /* Hide non-printable elements */
   nav, aside, button, .no-print, input[type="date"], input[type="text"], select {
     display: none !important;
+  }
+  
+  /* Ensure specific print sections are visible */
+  #daily-report-print, #staff-report-print, #printable-report {
+    display: block !important;
+    visibility: visible !important;
   }
 }

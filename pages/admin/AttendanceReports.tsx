@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, BarChart2, Users, AlertCircle, Clock, CheckCircle, Sparkles, Loader2, Printer } from 'lucide-react';
 import { getDailyAttendanceReport } from '../../services/storage';

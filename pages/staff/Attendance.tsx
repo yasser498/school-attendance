@@ -161,7 +161,7 @@ const Attendance: React.FC = () => {
                   <select
                     value={currentAssignment ? JSON.stringify(currentAssignment) : ''}
                     onChange={(e) => setCurrentAssignment(JSON.parse(e.target.value))}
-                    className="w-full md:min-w-[250px] appearance-none bg-blue-50 border border-blue-200 text-blue-900 font-bold py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 shadow-sm cursor-pointer"
+                    className="w-full md:min-w-[250px] appearance-none bg-blue-50 border border-blue-200 text-blue-900 font-bold py-3 pl-10 pr-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 shadow-sm cursor-pointer"
                   >
                     {currentUser.assignments.map((assign, idx) => (
                       <option key={idx} value={JSON.stringify(assign)}>
@@ -180,7 +180,7 @@ const Attendance: React.FC = () => {
 
         {/* Top Actions (Bulk) */}
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => markAll(AttendanceStatus.PRESENT)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm md:text-base">
+          <button onClick={() => markAll(AttendanceStatus.PRESENT)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm md:text-base border border-emerald-100">
             <CheckCircle size={18} /> تحضير الكل
           </button>
           <button onClick={() => markAll(AttendanceStatus.ABSENT)} className="bg-red-50 hover:bg-red-100 text-red-600 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 border border-red-100 text-sm md:text-base">
@@ -222,8 +222,9 @@ const Attendance: React.FC = () => {
               <div 
                 key={student.id} 
                 className={`bg-white p-4 rounded-xl border-2 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4
-                   ${attendanceMap[student.id] === AttendanceStatus.ABSENT ? 'border-red-100 shadow-sm' : 
-                     attendanceMap[student.id] === AttendanceStatus.LATE ? 'border-amber-100 shadow-sm' : 
+                   ${attendanceMap[student.id] === AttendanceStatus.ABSENT ? 'border-red-100 shadow-sm shadow-red-50' : 
+                     attendanceMap[student.id] === AttendanceStatus.LATE ? 'border-amber-100 shadow-sm shadow-amber-50' : 
+                     attendanceMap[student.id] === AttendanceStatus.PRESENT ? 'border-emerald-100 shadow-sm shadow-emerald-50' :
                      'border-transparent shadow-sm'}
                 `}
               >
@@ -231,12 +232,15 @@ const Attendance: React.FC = () => {
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border-2 shrink-0
                        ${attendanceMap[student.id] === AttendanceStatus.ABSENT ? 'bg-red-50 text-red-600 border-red-100' :
                          attendanceMap[student.id] === AttendanceStatus.LATE ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                         attendanceMap[student.id] === AttendanceStatus.PRESENT ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                          'bg-slate-100 text-slate-600 border-slate-200'}
                     `}>
                        {student.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                       <h3 className="font-bold text-slate-800 truncate">{student.name}</h3>
+                       <h3 className={`font-bold truncate ${attendanceMap[student.id] === AttendanceStatus.PRESENT ? 'text-emerald-800' : 'text-slate-800'}`}>
+                          {student.name}
+                       </h3>
                        <p className="text-xs text-slate-400 font-mono tracking-wider">{student.studentId}</p>
                     </div>
                  </div>
@@ -244,21 +248,21 @@ const Attendance: React.FC = () => {
                  <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
                     <button
                       onClick={() => handleStatusChange(student.id, AttendanceStatus.PRESENT)}
-                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.PRESENT ? 'bg-white text-emerald-600 shadow-sm font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.PRESENT ? 'bg-white text-emerald-600 shadow-sm font-bold ring-1 ring-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}
                       title="حاضر"
                     >
                        <CheckCircle size={24} className="sm:w-5 sm:h-5" />
                     </button>
                     <button
                       onClick={() => handleStatusChange(student.id, AttendanceStatus.LATE)}
-                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.LATE ? 'bg-white text-amber-500 shadow-sm font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.LATE ? 'bg-white text-amber-500 shadow-sm font-bold ring-1 ring-amber-100' : 'text-slate-400 hover:text-slate-600'}`}
                       title="متأخر"
                     >
                        <Clock size={24} className="sm:w-5 sm:h-5" />
                     </button>
                     <button
                       onClick={() => handleStatusChange(student.id, AttendanceStatus.ABSENT)}
-                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.ABSENT ? 'bg-white text-red-500 shadow-sm font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex-1 sm:flex-none p-2 rounded-md transition-all flex justify-center ${attendanceMap[student.id] === AttendanceStatus.ABSENT ? 'bg-white text-red-500 shadow-sm font-bold ring-1 ring-red-100' : 'text-slate-400 hover:text-slate-600'}`}
                       title="غائب"
                     >
                        <XCircle size={24} className="sm:w-5 sm:h-5" />

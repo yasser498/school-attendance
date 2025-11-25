@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2, RefreshCw } from 'lucide-react';
-import { getStaffUsersSync, getStaffUsers, addStaffUser, deleteStaffUser, getAvailableClassesForGrade } from '../../services/storage';
+import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2, RefreshCw, Edit } from 'lucide-react';
+import { getStaffUsersSync, getStaffUsers, addStaffUser, updateStaffUser, deleteStaffUser, getAvailableClassesForGrade } from '../../services/storage';
 import { StaffUser, ClassAssignment } from '../../types';
 import { GRADES } from '../../constants';
 
@@ -10,6 +10,7 @@ const Users: React.FC = () => {
   const [loading, setLoading] = useState(() => !getStaffUsersSync());
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   
@@ -94,10 +95,30 @@ const Users: React.FC = () => {
     setAssignments(updated);
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const openAddModal = () => {
+    setEditingUser(null);
+    setName('');
+    setPasscode('');
+    setAssignments([]);
+    setSelectedGrade('');
+    setSelectedClassesForGrade([]);
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (user: StaffUser) => {
+    setEditingUser(user);
+    setName(user.name);
+    setPasscode(user.passcode);
+    setAssignments(user.assignments || []);
+    setSelectedGrade('');
+    setSelectedClassesForGrade([]);
+    setShowAddModal(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (users.some(u => u.passcode === passcode)) {
+    if (users.some(u => u.passcode === passcode && u.id !== editingUser?.id)) {
       alert("رمز الدخول هذا مستخدم بالفعل، الرجاء اختيار رمز آخر.");
       return;
     }
@@ -115,14 +136,26 @@ const Users: React.FC = () => {
         className: a.className
       }));
 
-      const newUser: StaffUser = {
-        id: '', // Will be generated
-        name: name,
-        passcode: passcode,
-        assignments: cleanAssignments,
-      };
+      if (editingUser) {
+        // Update
+        const updatedUser: StaffUser = {
+          ...editingUser,
+          name: name,
+          passcode: passcode,
+          assignments: cleanAssignments,
+        };
+        await updateStaffUser(updatedUser);
+      } else {
+        // Create
+        const newUser: StaffUser = {
+          id: '', // Will be generated
+          name: name,
+          passcode: passcode,
+          assignments: cleanAssignments,
+        };
+        await addStaffUser(newUser);
+      }
 
-      await addStaffUser(newUser);
       // Refresh user list
       const updatedUsers = await getStaffUsers(true);
       setUsers(updatedUsers);
@@ -166,7 +199,7 @@ const Users: React.FC = () => {
           <p className="text-slate-500 text-sm mt-1">تحديد صلاحيات الدخول للفصول الدراسية</p>
         </div>
         <button 
-          onClick={() => setShowAddModal(true)}
+          onClick={openAddModal}
           className="flex items-center gap-2 bg-blue-900 text-white px-5 py-2.5 rounded-xl hover:bg-blue-800 transition-colors font-bold shadow-sm hover:shadow"
         >
           <Plus size={18} /> إضافة مستخدم جديد
@@ -193,7 +226,7 @@ const Users: React.FC = () => {
               <th className="p-4 w-1/4">اسم المعلم</th>
               <th className="p-4 w-1/4">رمز الدخول</th>
               <th className="p-4 w-1/3">الصفوف المسندة</th>
-              <th className="p-4">حذف</th>
+              <th className="p-4 text-left">إجراءات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -225,8 +258,11 @@ const Users: React.FC = () => {
                       )}
                     </div>
                  </td>
-                 <td className="p-4 align-top">
-                   <button onClick={() => handleDelete(u.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                 <td className="p-4 align-top text-left">
+                   <div className="flex justify-end gap-2">
+                     <button onClick={() => openEditModal(u)} className="text-slate-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={18}/></button>
+                     <button onClick={() => handleDelete(u.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                   </div>
                  </td>
                </tr>
              ))}
@@ -242,18 +278,20 @@ const Users: React.FC = () => {
         </table>
       </div>
 
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 animate-fade-in-up border border-slate-100 relative max-h-[90vh] overflow-y-auto">
               <button onClick={() => setShowAddModal(false)} className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 bg-slate-50 p-2 rounded-full">✕</button>
               
               <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                 <div className="bg-blue-100 p-2 rounded-lg text-blue-900"><Plus size={20}/></div>
-                 إضافة مستخدم جديد
+                 <div className="bg-blue-100 p-2 rounded-lg text-blue-900">
+                    {editingUser ? <Edit size={20}/> : <Plus size={20}/>}
+                 </div>
+                 {editingUser ? 'تعديل بيانات المستخدم' : 'إضافة مستخدم جديد'}
               </h2>
               
-              <form onSubmit={handleAddUser} className="space-y-6">
+              <form onSubmit={handleSaveUser} className="space-y-6">
                  <div className="grid md:grid-cols-2 gap-4">
                    <div>
                      <label className={labelClasses}>اسم المعلم / المشرف</label>
@@ -367,7 +405,7 @@ const Users: React.FC = () => {
                      disabled={saving}
                      className="flex-1 bg-blue-900 text-white py-3 rounded-xl hover:bg-blue-800 font-bold transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                    >
-                     {saving ? <Loader2 className="animate-spin" /> : 'حفظ المستخدم'}
+                     {saving ? <Loader2 className="animate-spin" /> : editingUser ? 'حفظ التعديلات' : 'حفظ المستخدم'}
                    </button>
                    <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-white border border-slate-300 text-slate-700 py-3 rounded-xl hover:bg-slate-50 font-bold transition-colors">إلغاء</button>
                  </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Eye, Calendar, Search, User, FileText, RefreshCw, Loader2, MessageCircle } from 'lucide-react';
+import { Check, X, Eye, Calendar, Search, User, FileText, RefreshCw, Loader2, MessageCircle, School, Paperclip } from 'lucide-react';
 import { getRequests, updateRequestStatus } from '../../services/storage';
 import { RequestStatus, ExcuseRequest, StaffUser } from '../../types';
 
@@ -72,13 +72,13 @@ const StaffRequests: React.FC = () => {
   }, [requests, filter, searchTerm]);
 
   const statusStyles = {
-    [RequestStatus.PENDING]: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'قيد المراجعة' },
-    [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'تم القبول' },
-    [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', label: 'مرفوض' },
+    [RequestStatus.PENDING]: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', label: 'قيد المراجعة' },
+    [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', label: 'تم القبول' },
+    [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', label: 'مرفوض' },
   };
 
-  // Helper to check if attachment is an image
-  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+  // Helper to check if attachment is an image (Fixed regex for query params)
+  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url);
 
   if (!currentUser) return null;
 
@@ -121,12 +121,12 @@ const StaffRequests: React.FC = () => {
               key={f}
               onClick={() => setFilter(f)}
               className={`
-                px-4 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap
+                px-4 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-2
                 ${filter === f ? 'bg-blue-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}
               `}
             >
               {f === 'ALL' ? 'الكل' : f === RequestStatus.PENDING ? 'جديدة' : f === RequestStatus.APPROVED ? 'مقبولة' : 'مرفوضة'}
-              <span className={`mr-2 px-1.5 py-0.5 rounded text-[10px] ${filter === f ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] ${filter === f ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
                 {f === 'ALL' ? requests.length : requests.filter(r => r.status === f).length}
               </span>
             </button>
@@ -134,7 +134,7 @@ const StaffRequests: React.FC = () => {
         </div>
       </div>
 
-      {/* Requests List */}
+      {/* Requests Grid */}
       {loading ? (
          <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
              <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
@@ -146,38 +146,59 @@ const StaffRequests: React.FC = () => {
              <p className="font-bold text-lg">لا توجد طلبات مطابقة</p>
          </div>
       ) : (
-         <div className="grid gap-4">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredRequests.map(req => (
-               <div key={req.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex items-start gap-4">
-                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-lg shrink-0">
-                        {req.studentName.charAt(0)}
-                     </div>
-                     <div>
-                        <h3 className="font-bold text-slate-800 text-lg">{req.studentName}</h3>
-                        <div className="flex flex-wrap gap-2 text-sm text-slate-500 mt-1">
-                           <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{req.grade} - {req.className}</span>
-                           <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
-                              <Calendar size={12} /> {req.date}
-                           </span>
-                        </div>
-                        <p className="text-slate-700 mt-2 font-medium">
-                           <span className="text-slate-400 text-xs ml-1">السبب:</span>
-                           {req.reason}
-                        </p>
-                     </div>
+               <div key={req.id} className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col overflow-hidden hover:-translate-y-1">
+                  {/* Card Header */}
+                  <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-white border border-slate-200 text-blue-700 flex items-center justify-center font-bold text-sm shadow-sm">
+                              {req.studentName.charAt(0)}
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-slate-800 text-sm truncate max-w-[120px]">{req.studentName}</h3>
+                              <p className="text-[10px] text-slate-500 font-mono">{req.studentId}</p>
+                          </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${statusStyles[req.status].bg} ${statusStyles[req.status].text} ${statusStyles[req.status].border}`}>
+                          {statusStyles[req.status].label}
+                      </span>
                   </div>
 
-                  <div className="flex flex-col items-end gap-3 w-full md:w-auto">
-                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyles[req.status].bg} ${statusStyles[req.status].text}`}>
-                        {statusStyles[req.status].label}
-                     </div>
-                     <button 
-                       onClick={() => setSelectedReq(req)}
-                       className="flex items-center gap-2 text-blue-900 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold transition-colors text-sm border border-blue-100 w-full md:w-auto justify-center"
-                     >
-                        <Eye size={16} /> عرض التفاصيل واتخاذ قرار
-                     </button>
+                  {/* Card Body */}
+                  <div className="p-5 flex-1 space-y-4">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                          <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200">
+                             <School size={12} className="text-slate-400"/> {req.grade} - {req.className}
+                          </span>
+                          <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full border border-blue-100">
+                             <Calendar size={12} /> {req.date}
+                          </span>
+                      </div>
+                      
+                      <div>
+                          <p className="text-sm font-bold text-slate-800 mb-1">{req.reason}</p>
+                          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                             {req.details || 'لا توجد تفاصيل إضافية.'}
+                          </p>
+                      </div>
+
+                      {req.attachmentName && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-blue-600 font-bold bg-blue-50/50 w-fit px-2.5 py-1.5 rounded-lg border border-blue-100">
+                              <Paperclip size={12} /> 
+                              <span className="truncate max-w-[150px]">{req.attachmentName}</span>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="p-4 border-t border-slate-50 bg-slate-50/30 mt-auto">
+                      <button 
+                          onClick={() => setSelectedReq(req)}
+                          className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-blue-900 hover:border-blue-300 hover:bg-blue-50 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm group-hover:shadow"
+                      >
+                          <Eye size={16} /> معاينة واتخاذ قرار
+                      </button>
                   </div>
                </div>
             ))}
@@ -186,84 +207,117 @@ const StaffRequests: React.FC = () => {
 
       {/* Detail Modal */}
       {selectedReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <User size={20} className="text-blue-900" /> تفاصيل العذر
-                 </h3>
-                 <button onClick={() => setSelectedReq(null)} className="text-slate-400 hover:text-red-500 bg-white p-1 rounded-full"><X size={20}/></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all">
+           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up border border-slate-200 flex flex-col max-h-[95vh]">
+              
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                 <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 p-2 rounded-lg text-blue-900">
+                        <User size={20} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-slate-900 text-lg">تفاصيل العذر</h3>
+                        <p className="text-xs text-slate-500">#{selectedReq.id.slice(-6)}</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setSelectedReq(null)} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-full transition-colors">
+                    <X size={20} />
+                 </button>
               </div>
               
-              <div className="p-6 space-y-6">
-                 <div className="space-y-4">
+              <div className="p-6 space-y-6 overflow-y-auto">
+                 {/* Student Info */}
+                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
                     <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase">الطالب</label>
-                       <p className="font-bold text-slate-800">{selectedReq.studentName}</p>
-                       <p className="text-xs text-slate-500">{selectedReq.grade} - {selectedReq.className}</p>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">الطالب</label>
+                       <p className="font-bold text-slate-800 text-sm">{selectedReq.studentName}</p>
                     </div>
-                    
                     <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase">تاريخ الغياب</label>
-                       <p className="font-bold text-blue-900 bg-blue-50 w-fit px-3 py-1 rounded-lg mt-1">{selectedReq.date}</p>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">الصف</label>
+                       <p className="font-bold text-slate-800 text-sm">{selectedReq.grade} - {selectedReq.className}</p>
                     </div>
-
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                       <label className="text-xs font-bold text-slate-400 uppercase block mb-2">سبب الغياب</label>
-                       <p className="font-bold text-slate-800 mb-1">{selectedReq.reason}</p>
-                       <p className="text-sm text-slate-600 leading-relaxed">{selectedReq.details || 'لا توجد تفاصيل إضافية'}</p>
-                    </div>
-
                     <div>
-                       <label className="text-xs font-bold text-slate-400 uppercase">المرفقات</label>
-                       {selectedReq.attachmentName ? (
-                          <div>
-                             {selectedReq.attachmentUrl ? (
-                                <>
-                                   <a 
-                                     href={selectedReq.attachmentUrl} 
-                                     target="_blank" 
-                                     rel="noreferrer"
-                                     className="flex items-center gap-3 p-3 mt-2 rounded-xl border border-blue-100 bg-blue-50 hover:bg-blue-100 transition-colors text-blue-900 font-bold text-sm group"
-                                   >
-                                      <div className="bg-white p-2 rounded-lg text-blue-500 group-hover:scale-110 transition-transform"><FileText size={18} /></div>
-                                      <span>فتح المرفق (تحميل/معاينة)</span>
-                                   </a>
-                                   
-                                   {/* Image Preview */}
-                                   {isImage(selectedReq.attachmentUrl) && (
-                                      <div className="mt-3 relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                                          <img src={selectedReq.attachmentUrl} alt="Attachment Preview" className="w-full h-auto max-h-48 object-cover" />
-                                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => window.open(selectedReq.attachmentUrl, '_blank')}>
-                                              <span className="text-white font-bold flex items-center gap-2"><Eye size={20} /> تكبير الصورة</span>
-                                          </div>
-                                      </div>
-                                   )}
-                                </>
-                             ) : (
-                                <p className="text-sm text-slate-400 italic mt-1 bg-slate-50 p-2 rounded">لا يوجد مرفق (أو تم حذفه)</p>
-                             )}
-                          </div>
-                       ) : (
-                          <div className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-300">لا يوجد مرفقات</div>
-                       )}
+                       <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">تاريخ الغياب</label>
+                       <p className="font-mono text-blue-900 text-sm font-bold">{selectedReq.date}</p>
+                    </div>
+                    <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">الحالة الحالية</label>
+                       <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${statusStyles[selectedReq.status].bg} ${statusStyles[selectedReq.status].text}`}>
+                          {statusStyles[selectedReq.status].label}
+                       </span>
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-                    <button 
-                      onClick={() => handleStatusChange(selectedReq.id, RequestStatus.APPROVED)}
-                      className="bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                       <Check size={18} /> قبول العذر
-                    </button>
-                    <button 
-                      onClick={() => handleStatusChange(selectedReq.id, RequestStatus.REJECTED)}
-                      className="bg-white border-2 border-red-100 text-red-600 py-3 rounded-xl font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
-                    >
-                       <X size={18} /> رفض الطلب
-                    </button>
+                 {/* Reason */}
+                 <div>
+                    <h4 className="font-bold text-slate-800 mb-2 text-sm flex items-center gap-2">
+                        <FileText size={16} className="text-blue-500"/> سبب الغياب
+                    </h4>
+                    <div className="bg-white border border-slate-200 p-4 rounded-xl">
+                        <p className="font-bold text-slate-900 mb-2 text-sm">{selectedReq.reason}</p>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            {selectedReq.details || 'لا توجد تفاصيل إضافية مكتوبة.'}
+                        </p>
+                    </div>
                  </div>
+
+                 {/* Attachment */}
+                 <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase block mb-2">المرفقات</label>
+                    {selectedReq.attachmentName ? (
+                       <div>
+                          {selectedReq.attachmentUrl ? (
+                             <>
+                                <a 
+                                  href={selectedReq.attachmentUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="flex items-center gap-3 p-3 rounded-xl border border-blue-100 bg-blue-50 hover:bg-blue-100 transition-colors text-blue-900 font-bold text-sm group"
+                                >
+                                   <div className="bg-white p-2 rounded-lg text-blue-500 group-hover:scale-110 transition-transform shadow-sm"><FileText size={18} /></div>
+                                   <div className="flex-1 min-w-0">
+                                       <p className="truncate">{selectedReq.attachmentName}</p>
+                                       <p className="text-[10px] font-normal opacity-70">اضغط لفتح الملف</p>
+                                   </div>
+                                </a>
+                                
+                                {/* Image Preview */}
+                                {isImage(selectedReq.attachmentUrl) && (
+                                   <div className="mt-3 relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                       <img src={selectedReq.attachmentUrl} alt="Attachment Preview" className="w-full h-auto max-h-48 object-cover" />
+                                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => window.open(selectedReq.attachmentUrl, '_blank')}>
+                                           <span className="text-white font-bold flex items-center gap-2"><Eye size={20} /> تكبير الصورة</span>
+                                       </div>
+                                   </div>
+                                )}
+                             </>
+                          ) : (
+                             <p className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-200">لا يوجد رابط للمرفق (قد يكون تم حذفه)</p>
+                          )}
+                       </div>
+                    ) : (
+                       <div className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-200 flex items-center gap-2">
+                           <X size={16} /> لا يوجد مرفقات
+                       </div>
+                    )}
+                 </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 md:p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex gap-3">
+                 <button 
+                   onClick={() => handleStatusChange(selectedReq.id, RequestStatus.APPROVED)}
+                   className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 active:scale-95"
+                 >
+                    <Check size={18} /> قبول
+                 </button>
+                 <button 
+                   onClick={() => handleStatusChange(selectedReq.id, RequestStatus.REJECTED)}
+                   className="flex-1 bg-white border-2 border-red-100 text-red-600 py-3 rounded-xl font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 active:scale-95"
+                 >
+                    <X size={18} /> رفض
+                 </button>
               </div>
            </div>
         </div>

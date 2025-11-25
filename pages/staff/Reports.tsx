@@ -319,8 +319,8 @@ const StaffReports: React.FC = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Stats Summary */}
-                        <div className="grid grid-cols-3 gap-6">
+                        {/* Stats Summary - Responsive Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
                                 <div className="bg-emerald-100 p-4 rounded-full text-emerald-600">
                                     <CheckCircle size={32} />
@@ -520,7 +520,7 @@ const StaffReports: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {statsData.topLateStudents.map((s: any, idx: number) => (
-                                            <tr key={idx} className="hover:bg-amber-50/30">
+                                            <tr key={idx} className="hover:bg-amber-50/20">
                                                 <td className="p-3 font-bold text-slate-800">{s.name}</td>
                                                 <td className="p-3 text-slate-500">{s.grade} - {s.className}</td>
                                                 <td className="p-3 text-center font-bold text-amber-600">{s.late}</td>

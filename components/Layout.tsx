@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, PieChart, MessageSquare } from 'lucide-react';
+import { StaffUser } from '../types';
+import { getPendingRequestsCountForStaff } from '../services/storage';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,11 +13,12 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const isActive = (path: string) => location.pathname === path;
 
   const navLinkClass = (path: string) => `
-    flex items-center gap-3 px-4 py-3.5 rounded-lg transition-colors duration-200 font-medium shrink-0 text-sm md:text-base
+    flex items-center gap-3 px-4 py-3.5 rounded-lg transition-colors duration-200 font-medium shrink-0 text-sm md:text-base relative
     ${isActive(path) 
       ? 'bg-blue-50 text-blue-900 border-r-4 border-blue-900' 
       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
@@ -28,6 +31,24 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
   React.useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Fetch Pending Count for Staff
+  useEffect(() => {
+    if (role === 'staff') {
+      const fetchCount = async () => {
+        const session = localStorage.getItem('ozr_staff_session');
+        if (session) {
+          const user: StaffUser = JSON.parse(session);
+          const count = await getPendingRequestsCountForStaff(user.assignments || []);
+          setPendingCount(count);
+        }
+      };
+      fetchCount();
+      // Poll every 60 seconds
+      const interval = setInterval(fetchCount, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden">
@@ -144,7 +165,14 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
               </Link>
               <Link to="/staff/requests" className={navLinkClass('/staff/requests')}>
                 <MessageSquare size={20} />
-                <span>طلبات الأعذار</span>
+                <div className="flex items-center justify-between w-full">
+                  <span>طلبات الأعذار</span>
+                  {pendingCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                      {pendingCount}
+                    </span>
+                  )}
+                </div>
               </Link>
               <Link to="/staff/reports" className={navLinkClass('/staff/reports')}>
                 <BarChart2 size={20} />

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { PieChart as PieChartIcon, TrendingUp, Users, AlertTriangle, Clock, Calendar, Sparkles, Loader2, ArrowUpRight } from 'lucide-react';
+import { PieChart as PieChartIcon, TrendingUp, Users, AlertTriangle, Clock, Calendar, Sparkles, Loader2, ArrowUpRight, BrainCircuit } from 'lucide-react';
 import { getAttendanceRecords } from '../../services/storage';
 import { AttendanceStatus, AttendanceRecord } from '../../types';
 import { GoogleGenAI } from "@google/genai";
@@ -9,6 +9,11 @@ import { GoogleGenAI } from "@google/genai";
 const AttendanceStats: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
+  
+  // Risk Prediction State
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [predictionReport, setPredictionReport] = useState<string | null>(null);
+
   const [allRecords, setAllRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -102,8 +107,9 @@ const AttendanceStats: React.FC = () => {
       ...data
     }));
 
-    const topAbsentStudents = Object.values(studentStats)
-      .sort((a, b) => b.absent - a.absent)
+    const allStudentsStats = Object.values(studentStats).sort((a, b) => b.absent - a.absent);
+
+    const topAbsentStudents = allStudentsStats
       .filter(s => s.absent > 0)
       .slice(0, 5);
 
@@ -124,7 +130,8 @@ const AttendanceStats: React.FC = () => {
       gradeChartData,
       topAbsentStudents,
       topLateStudents,
-      busiestAbsenceDay
+      busiestAbsenceDay,
+      allStudentsStats // Exposed for AI prediction
     };
   }, [allRecords]);
 
@@ -174,6 +181,55 @@ const AttendanceStats: React.FC = () => {
     }
   };
 
+  // --- AI Prediction ---
+  const generateRiskPrediction = async () => {
+    setIsPredicting(true);
+    setPredictionReport(null);
+
+    try {
+      const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+      if (!key) throw new Error("Missing Key");
+
+      const ai = new GoogleGenAI({ apiKey: key });
+      
+      // Filter relevant students (e.g. > 3 absences) to reduce token usage
+      const atRiskStudents = stats.allStudentsStats
+        .filter(s => s.absent > 2)
+        .map(s => `- ${s.name} (${s.grade}): ${s.absent} أيام غياب`)
+        .join('\n');
+
+      if (!atRiskStudents) {
+          setPredictionReport("سجل الطلاب ممتاز! لا يوجد طلاب لديهم عدد كبير من أيام الغياب (أكثر من يومين) لتحليل المخاطر.");
+          setIsPredicting(false);
+          return;
+      }
+
+      const prompt = `
+        بصفتك نظام ذكي للتنبؤ بالمخاطر المدرسية (AI Risk Predictor).
+        لديك القائمة التالية للطلاب الذين بدأوا يتغيبون:
+        ${atRiskStudents}
+
+        المطلوب تحليل تنبؤي دقيق:
+        1. **تحديد الطلاب في دائرة الخطر:** من هم الطلاب الذين يقتربون من حد الحرمان أو الخطر؟
+        2. **التنبؤ المستقبلي:** بناءً على هذا النمط، من تتوقع أن يتجاوز الحد المسموح الشهر القادم؟
+        3. **الإجراء الاستباقي:** اقترح إجراءً وقائياً لكل فئة (مثلاً: استدعاء ولي أمر، توجيه طلابي).
+
+        الرجاء تنسيق الرد بشكل نقاط واضحة وجدول إن أمكن.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+      });
+
+      setPredictionReport(response.text.trim());
+    } catch (error) {
+      setPredictionReport("عذراً، حدث خطأ أثناء التنبؤ. يرجى التأكد من المفتاح.");
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
   const pieData = [
     { name: 'حضور', value: stats.totalPresent, color: '#10b981' },
     { name: 'غياب', value: stats.totalAbsent, color: '#ef4444' },
@@ -199,33 +255,66 @@ const AttendanceStats: React.FC = () => {
           </h1>
           <p className="text-slate-500 mt-1">لوحة قيادة شاملة لمراقبة الانضباط المدرسي</p>
         </div>
-        <button 
-           onClick={generateStrategy}
-           disabled={isGenerating}
-           className="bg-gradient-to-r from-blue-900 to-slate-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-blue-900/20 transition-all flex items-center gap-2 disabled:opacity-70"
-        >
-           {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles size={18} className="text-amber-400" />}
-           <span>استشارة المستشار الذكي</span>
-        </button>
+        <div className="flex gap-3">
+            <button 
+            onClick={generateRiskPrediction}
+            disabled={isPredicting}
+            className="bg-white border-2 border-indigo-100 text-indigo-700 hover:bg-indigo-50 px-5 py-3 rounded-xl font-bold transition-all flex items-center gap-2 disabled:opacity-70"
+            >
+            {isPredicting ? <Loader2 className="animate-spin" size={18}/> : <BrainCircuit size={18} />}
+            <span>تنبؤ المخاطر (AI)</span>
+            </button>
+            <button 
+            onClick={generateStrategy}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-blue-900 to-slate-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-blue-900/20 transition-all flex items-center gap-2 disabled:opacity-70"
+            >
+            {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18} className="text-amber-400" />}
+            <span>استشارة المستشار الذكي</span>
+            </button>
+        </div>
       </div>
 
-      {/* AI Report Section */}
-      {aiReport && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden animate-fade-in">
-           <div className="bg-amber-500 p-1"></div>
-           <div className="p-8">
-              <div className="flex items-center gap-3 mb-6">
-                 <div className="bg-amber-100 p-2 rounded-lg text-amber-700">
-                    <Sparkles size={24} />
-                 </div>
-                 <h2 className="text-xl font-bold text-slate-900">التقرير الاستراتيجي (AI)</h2>
-              </div>
-              <div className="prose prose-slate max-w-none text-slate-700 leading-loose whitespace-pre-line font-medium">
-                 {aiReport}
-              </div>
-           </div>
-        </div>
-      )}
+      {/* AI Reports Section */}
+      <div className="space-y-6">
+        {/* Strategy Report */}
+        {aiReport && (
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden animate-fade-in">
+            <div className="bg-amber-500 p-1"></div>
+            <div className="p-8">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-amber-100 p-2 rounded-lg text-amber-700">
+                        <Sparkles size={24} />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">التقرير الاستراتيجي (AI)</h2>
+                </div>
+                <div className="prose prose-slate max-w-none text-slate-700 leading-loose whitespace-pre-line font-medium">
+                    {aiReport}
+                </div>
+            </div>
+            </div>
+        )}
+
+        {/* Prediction Report */}
+        {predictionReport && (
+            <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden animate-fade-in">
+            <div className="bg-indigo-600 p-1"></div>
+            <div className="p-8">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-700">
+                        <BrainCircuit size={24} />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">تقرير تنبؤ المخاطر (Risk Prediction)</h2>
+                </div>
+                <div className="bg-indigo-50/50 rounded-xl p-6 border border-indigo-100">
+                    <div className="prose prose-indigo max-w-none text-slate-800 leading-loose whitespace-pre-line font-medium">
+                        {predictionReport}
+                    </div>
+                </div>
+            </div>
+            </div>
+        )}
+      </div>
 
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

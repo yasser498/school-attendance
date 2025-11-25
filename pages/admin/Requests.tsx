@@ -130,7 +130,8 @@ const Requests: React.FC = () => {
     [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-red-200', label: 'مرفوض' },
   };
 
-  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+  // Fixed regex to handle query params in URL
+  const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url);
 
   // --- Virtualized Row Component ---
   const Row = ({ index, style }: ListChildComponentProps) => {

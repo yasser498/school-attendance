@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient';
-import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus } from "../types";
+import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus, ClassAssignment } from "../types";
 
 // --- Caching System ---
 const CACHE: Record<string, { data: any, timestamp: number }> = {};
@@ -119,7 +119,9 @@ export const testSupabaseConnection = async (): Promise<{ success: boolean; mess
 export const uploadFile = async (file: File): Promise<string | null> => {
   try {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+    // Sanitizing filename to ASCII only to prevent encoding issues
+    const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+    const fileName = `${Date.now()}_${safeName}`;
     const filePath = `${fileName}`;
 
     const { error: uploadError } = await supabase.storage
@@ -132,7 +134,7 @@ export const uploadFile = async (file: File): Promise<string | null> => {
     return data.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
-    return null;
+    throw error; // Re-throw to be caught by UI
   }
 };
 
@@ -163,7 +165,7 @@ export const getStudentByCivilId = async (civilId: string): Promise<Student | nu
     .from('students')
     .select('*')
     .eq('student_id', civilId)
-    .single();
+    .maybeSingle(); // Use maybeSingle to avoid errors on not found
 
   if (error || !data) return null;
   return mapStudentFromDB(data);
@@ -274,6 +276,35 @@ export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseR
   return data.map(mapRequestFromDB);
 };
 
+// New function for Staff Notification Badge
+export const getPendingRequestsCountForStaff = async (assignments: ClassAssignment[]): Promise<number> => {
+  if (!assignments || assignments.length === 0) return 0;
+
+  let query = supabase
+    .from('requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'PENDING');
+
+  // Supabase OR filter for multiple grade/class combinations:
+  // grade.eq.X,class_name.eq.Y, ...
+  // To simplify, we fetch all pending and filter in JS or construct a complex OR query.
+  // Complex OR query in Supabase JS: .or('and(grade.eq.X,class_name.eq.Y),and(...)')
+  
+  if (assignments.length > 0) {
+    const orConditions = assignments.map(a => `and(grade.eq.${a.grade},class_name.eq.${a.className})`).join(',');
+    query = query.or(orConditions);
+  }
+
+  const { count, error } = await query;
+  
+  if (error) {
+    console.error("Error counting pending requests:", error);
+    return 0;
+  }
+  
+  return count || 0;
+};
+
 export const addRequest = async (req: ExcuseRequest) => {
   const { error } = await supabase.from('requests').insert(mapRequestToDB(req));
   if (error) throw error;
@@ -282,9 +313,6 @@ export const addRequest = async (req: ExcuseRequest) => {
 
 export const updateRequestStatus = async (id: string, status: RequestStatus) => {
   // If Approved or Rejected, we might want to clean up the file to save storage
-  // But for now, we will keep the URL in DB but maybe delete file from bucket if needed.
-  // Let's implement the cleanup logic requested: Delete file upon decision.
-  
   if (status === RequestStatus.APPROVED || status === RequestStatus.REJECTED) {
      // 1. Get the attachment URL first
      const { data: reqData } = await supabase.from('requests').select('attachment_url').eq('id', id).single();
@@ -347,6 +375,16 @@ export const addStaffUser = async (user: StaffUser) => {
   invalidateCache('staff');
 };
 
+export const updateStaffUser = async (user: StaffUser) => {
+  const { error } = await supabase
+    .from('staff')
+    .update(mapStaffToDB(user))
+    .eq('id', user.id);
+
+  if (error) throw error;
+  invalidateCache('staff');
+};
+
 export const deleteStaffUser = async (id: string) => {
   const { error } = await supabase.from('staff').delete().eq('id', id);
   if (error) throw error;
@@ -358,7 +396,7 @@ export const authenticateStaff = async (passcode: string): Promise<StaffUser | n
     .from('staff')
     .select('*')
     .eq('passcode', passcode)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return null;
   return mapStaffFromDB(data);
@@ -387,7 +425,7 @@ export const getAttendanceRecordForClass = async (date: string, grade: string, c
     .eq('date', date)
     .eq('grade', grade)
     .eq('class_name', className)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return null;
   return mapAttendanceFromDB(data);
@@ -401,7 +439,7 @@ export const saveAttendanceRecord = async (record: AttendanceRecord) => {
     .eq('date', record.date)
     .eq('grade', record.grade)
     .eq('class_name', record.className)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     // Update

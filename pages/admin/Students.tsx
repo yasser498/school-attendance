@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Search, UploadCloud, AlertTriangle, Loader2, FileSpreadsheet, RefreshCw, CheckSquare, Square, X, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Search, UploadCloud, AlertTriangle, Loader2, FileSpreadsheet, RefreshCw, CheckSquare, Square, X, AlertCircle, WifiOff } from 'lucide-react';
 import { getStudents, syncStudentsBatch, getStudentsSync, addStudent, deleteStudent } from '../../services/storage';
 import { Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
@@ -11,8 +11,10 @@ declare var XLSX: any;
 const Students: React.FC = () => {
   // Instant Load: Initialize with cached data if available
   const [students, setStudents] = useState<Student[]>(() => getStudentsSync() || []);
+  
   // Only show loading if we don't have data
   const [loading, setLoading] = useState(() => !getStudentsSync());
+  const [error, setError] = useState<string | null>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,20 +30,27 @@ const Students: React.FC = () => {
   const [newPhone, setNewPhone] = useState('');
 
   const fetchStudents = async (force = false) => {
-    // If we are forcing, or if we have no data, show loading
-    if (force || students.length === 0) setLoading(true);
+    // If we are forcing refresh or have no initial data, show loading state
+    if (force || students.length === 0) {
+      setLoading(true);
+    }
+    setError(null);
     
     try {
+        console.log("Fetching students...");
         const data = await getStudents(force);
         setStudents(data);
-    } catch (e) {
-        console.error("Error fetching students:", e);
+    } catch (e: any) {
+        console.error("Error fetching students in component:", e);
+        setError(e.message || "تعذر جلب البيانات. يرجى التحقق من الاتصال بالإنترنت.");
     } finally {
+        // Ensure loading is turned off regardless of success/failure
         setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchStudents();
   }, []);
 
@@ -335,7 +344,7 @@ const Students: React.FC = () => {
              className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors font-medium"
              title="تحديث البيانات من السيرفر"
            >
-             <RefreshCw size={18} className={loading && students.length > 0 ? 'animate-spin' : ''} />
+             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
            </button>
            <button 
             onClick={() => setShowAddModal(true)}
@@ -403,6 +412,18 @@ const Students: React.FC = () => {
         </div>
       )}
 
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex items-center gap-3 text-red-800 mb-4">
+            <WifiOff size={24} />
+            <div>
+                <p className="font-bold">فشل الاتصال!</p>
+                <p className="text-sm">{error}</p>
+                <button onClick={handleRefresh} className="mt-2 text-sm underline font-bold hover:text-red-950">حاول مرة أخرى</button>
+            </div>
+        </div>
+      )}
+
       {/* Virtualized Table Container */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-[600px] flex flex-col">
         {/* Table Header - Static Flex Div */}
@@ -426,13 +447,14 @@ const Students: React.FC = () => {
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                 <Loader2 className="animate-spin mx-auto mb-2" size={32} />
                 <p>جاري تحميل بيانات الطلاب...</p>
+                <p className="text-xs text-slate-400 mt-2">إذا استغرق وقتاً طويلاً، تحقق من اتصالك.</p>
             </div>
-        ) : filteredStudents.length === 0 ? (
+        ) : filteredStudents.length === 0 && !error ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-12">
                 <AlertTriangle size={48} className="mx-auto mb-2 opacity-50" />
                 <p>لا توجد بيانات طلاب. قم بإضافة طلاب أو رفع ملف Excel.</p>
             </div>
-        ) : (
+        ) : !error ? (
             // Virtualized List
             <div className="flex-1" style={{ direction: 'ltr' }}>
                  <List
@@ -446,6 +468,8 @@ const Students: React.FC = () => {
                     {Row}
                  </List>
             </div>
+        ) : (
+            <div className="flex-1 bg-slate-50"></div>
         )}
       </div>
 

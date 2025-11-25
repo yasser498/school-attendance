@@ -69,6 +69,7 @@ export const testFirebaseConnection = async (): Promise<{ success: boolean; mess
     if (error.code === 'permission-denied') msg = "تم رفض الصلاحية (Permission Denied). تأكد من Rules.";
     if (error.code === 'unavailable') msg = "الخدمة غير متاحة (Offline). تأكد من الإنترنت.";
     if (error.code === 'not-found' || msg.includes('database')) msg = "قاعدة البيانات غير موجودة! تأكد من إنشاء Firestore Database في لوحة تحكم جوجل.";
+    if (msg.includes('Failed to fetch') || msg.includes('network')) msg = "مشكلة في الشبكة أو حظر من المتصفح (AdBlocker).";
     return { success: false, message: `فشل الاتصال: ${msg}` };
   }
 };
@@ -78,24 +79,41 @@ export const testFirebaseConnection = async (): Promise<{ success: boolean; mess
 export const getStudentsSync = (): Student[] | null => getFromCache<Student[]>('students');
 
 export const getStudents = async (forceRefresh = false): Promise<Student[]> => {
+  console.log(`[getStudents] Called with forceRefresh=${forceRefresh}`);
+
   // 1. Try Cache First
   if (!forceRefresh) {
     const cached = getFromCache<Student[]>('students');
-    if (cached) return cached;
+    if (cached) {
+      console.log('[getStudents] Returning cached data');
+      return cached;
+    }
   }
 
   try {
-    // 2. Fetch from Firebase
-    const snapshot = await getDocs(collection(db, COLL_STUDENTS));
-    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
+    console.log('[getStudents] Connecting to Firebase...');
+    
+    // Create a timeout promise to reject if Firestore hangs (e.g., due to blocking)
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Network Timeout: Firestore took too long to respond.")), 15000)
+    );
+
+    // Race between fetch and timeout
+    const snapshot = await Promise.race([
+      getDocs(collection(db, COLL_STUDENTS)),
+      timeoutPromise
+    ]) as any; // Casting as any to satisfy Promise.race types with query snapshot
+
+    console.log(`[getStudents] Snapshot received. Docs count: ${snapshot.docs.length}`);
+    const data = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() } as Student));
     
     // 3. Update Cache
     setCache('students', data);
     return data;
-  } catch (error) {
-    console.error("Error fetching students:", error);
-    // Return empty array instead of crashing, but log error
-    return [];
+  } catch (error: any) {
+    console.error("[getStudents] Error fetching students:", error);
+    // Throwing the error allows the UI to catch it and stop loading state
+    throw error; 
   }
 };
 

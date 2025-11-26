@@ -1,5 +1,7 @@
+
 import { supabase } from '../supabaseClient';
-import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus, ClassAssignment } from "../types";
+import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus, ClassAssignment, ResolvedAlert, BehaviorRecord, AdminInsight, Referral } from "../types";
+import { GoogleGenAI } from "@google/genai";
 
 // --- Caching System ---
 const CACHE: Record<string, { data: any, timestamp: number }> = {};
@@ -19,6 +21,84 @@ const setCache = (key: string, data: any) => {
 
 export const invalidateCache = (key: string) => {
   delete CACHE[key];
+};
+
+// --- AI SERVICE (Multi-Model Support) ---
+export interface AIConfig {
+  provider: 'google' | 'openai_compatible'; // google = Gemini SDK, openai_compatible = DeepSeek, OpenRouter, etc.
+  apiKey: string;
+  baseUrl?: string; // For OpenAI compatible (e.g., https://api.deepseek.com/v1)
+  model: string; // e.g., gemini-1.5-flash, gpt-4o, deepseek-chat
+}
+
+export const getAIConfig = (): AIConfig => {
+  const stored = localStorage.getItem('ozr_ai_config');
+  if (stored) {
+    const config = JSON.parse(stored);
+    // Auto-migration for deprecated/removed models to prevent 404 errors
+    if (config.model === 'gemini-1.5-flash' || config.model === 'gemini-pro' || config.model === 'gemini-1.0-pro') {
+        config.model = 'gemini-2.5-flash';
+        localStorage.setItem('ozr_ai_config', JSON.stringify(config));
+    }
+    return config;
+  }
+  // Default
+  return {
+    provider: 'google',
+    apiKey: process.env.API_KEY || '',
+    model: 'gemini-2.5-flash'
+  };
+};
+
+export const generateSmartContent = async (prompt: string, systemInstruction?: string): Promise<string> => {
+  const config = getAIConfig();
+  if (!config.apiKey) throw new Error("مفتاح الذكاء الاصطناعي مفقود. يرجى ضبط الإعدادات.");
+
+  try {
+    if (config.provider === 'google') {
+      // Use Google GenAI SDK
+      const ai = new GoogleGenAI({ apiKey: config.apiKey });
+      const response = await ai.models.generateContent({
+        model: config.model,
+        contents: prompt,
+        config: {
+          systemInstruction: systemInstruction
+        }
+      });
+      return response.text || "لم يتم استلام رد من النموذج.";
+    } else {
+      // Use Fetch for OpenAI Compatible (DeepSeek, OpenRouter, etc.)
+      const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
+      const url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemInstruction || 'You are a helpful assistant.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`API Error: ${err}`);
+      }
+
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || "لم يتم استلام رد.";
+    }
+  } catch (error: any) {
+    console.error("AI Generation Error:", error);
+    throw new Error(`فشل التوليد: ${error.message}`);
+  }
 };
 
 // --- MAPPING HELPERS (App uses CamelCase, DB uses snake_case) ---
@@ -74,13 +154,16 @@ const mapStaffFromDB = (u: any): StaffUser => ({
   id: u.id,
   name: u.name,
   passcode: u.passcode,
-  assignments: u.assignments || [] // JSONB
+  assignments: u.assignments || [], // JSONB
+  // Default permissions for backward compatibility: Basic Teacher Roles
+  permissions: u.permissions || ['attendance', 'requests', 'reports'] 
 });
 
 const mapStaffToDB = (u: StaffUser) => ({
   name: u.name,
   passcode: u.passcode,
-  assignments: u.assignments
+  assignments: u.assignments || [],
+  permissions: u.permissions || []
 });
 
 const mapAttendanceFromDB = (a: any): AttendanceRecord => ({
@@ -98,6 +181,70 @@ const mapAttendanceToDB = (a: AttendanceRecord) => ({
   class_name: a.className,
   staff_id: a.staffId,
   records: a.records
+});
+
+const mapBehaviorFromDB = (b: any): BehaviorRecord => ({
+  id: b.id,
+  studentId: b.student_id,
+  studentName: b.student_name,
+  grade: b.grade,
+  className: b.class_name,
+  date: b.date,
+  violationDegree: b.violation_degree,
+  violationName: b.violation_name,
+  articleNumber: b.article_number,
+  actionTaken: b.action_taken,
+  notes: b.notes,
+  staffId: b.staff_id,
+  createdAt: b.created_at
+});
+
+const mapBehaviorToDB = (b: BehaviorRecord) => ({
+  student_id: b.studentId,
+  student_name: b.studentName,
+  grade: b.grade,
+  class_name: b.className,
+  date: b.date,
+  violation_degree: b.violationDegree,
+  violation_name: b.violationName,
+  article_number: b.articleNumber,
+  action_taken: b.actionTaken,
+  notes: b.notes,
+  staff_id: b.staffId
+});
+
+const mapInsightFromDB = (i: any): AdminInsight => ({
+  id: i.id,
+  targetRole: i.target_role,
+  content: i.content,
+  isRead: i.is_read,
+  createdAt: i.created_at
+});
+
+const mapReferralFromDB = (r: any): Referral => ({
+  id: r.id,
+  studentId: r.student_id,
+  studentName: r.student_name,
+  grade: r.grade,
+  className: r.class_name,
+  referralDate: r.referral_date,
+  reason: r.reason,
+  status: r.status,
+  referredBy: r.referred_by,
+  notes: r.notes,
+  createdAt: r.created_at
+});
+
+const mapReferralToDB = (r: Referral) => ({
+  student_id: r.studentId,
+  student_name: r.studentName,
+  grade: r.grade,
+  class_name: r.className,
+  referral_date: r.referralDate,
+  reason: r.reason,
+  status: r.status,
+  referred_by: r.referredBy,
+  notes: r.notes
 });
 
 // --- DIAGNOSTIC TOOL ---
@@ -169,6 +316,19 @@ export const getStudentByCivilId = async (civilId: string): Promise<Student | nu
 
   if (error || !data) return null;
   return mapStudentFromDB(data);
+};
+
+export const findStudentsByDetails = async (grade: string, className: string, namePart: string): Promise<Student[]> => {
+  // Search using ilike for case-insensitive partial match on name
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('grade', grade)
+    .eq('class_name', className)
+    .ilike('name', `%${namePart}%`);
+
+  if (error || !data) return [];
+  return data.map(mapStudentFromDB);
 };
 
 export const getAvailableClassesForGrade = async (grade: string): Promise<string[]> => {
@@ -285,11 +445,6 @@ export const getPendingRequestsCountForStaff = async (assignments: ClassAssignme
     .select('id', { count: 'exact', head: true })
     .eq('status', 'PENDING');
 
-  // Supabase OR filter for multiple grade/class combinations:
-  // grade.eq.X,class_name.eq.Y, ...
-  // To simplify, we fetch all pending and filter in JS or construct a complex OR query.
-  // Complex OR query in Supabase JS: .or('and(grade.eq.X,class_name.eq.Y),and(...)')
-  
   if (assignments.length > 0) {
     const orConditions = assignments.map(a => `and(grade.eq.${a.grade},class_name.eq.${a.className})`).join(',');
     query = query.or(orConditions);
@@ -371,7 +526,8 @@ export const getStaffUsers = async (forceRefresh = false): Promise<StaffUser[]> 
 
 export const addStaffUser = async (user: StaffUser) => {
   const { error } = await supabase.from('staff').insert(mapStaffToDB(user));
-  if (error) throw error;
+  // Change: wrap error in standard Error object for better handling upstream
+  if (error) throw new Error(error.message);
   invalidateCache('staff');
 };
 
@@ -381,13 +537,15 @@ export const updateStaffUser = async (user: StaffUser) => {
     .update(mapStaffToDB(user))
     .eq('id', user.id);
 
-  if (error) throw error;
+  // Change: wrap error in standard Error object
+  if (error) throw new Error(error.message);
   invalidateCache('staff');
 };
 
 export const deleteStaffUser = async (id: string) => {
   const { error } = await supabase.from('staff').delete().eq('id', id);
-  if (error) throw error;
+  // Change: wrap error in standard Error object
+  if (error) throw new Error(error.message);
   invalidateCache('staff');
 };
 
@@ -503,6 +661,12 @@ export const getDailyAttendanceReport = async (date: string) => {
 
   const dayRecords = data.map(mapAttendanceFromDB);
   
+  // FIX: Fetch students to backfill missing IDs in old records for proper linking
+  let allStudents: Student[] = [];
+  try {
+     allStudents = await getStudents(); 
+  } catch (e) { console.warn("Could not fetch students for backfilling IDs"); }
+
   let totalPresent = 0;
   let totalAbsent = 0;
   let totalLate = 0;
@@ -515,7 +679,15 @@ export const getDailyAttendanceReport = async (date: string) => {
       if (student.status === AttendanceStatus.LATE) totalLate++;
       
       if (student.status !== AttendanceStatus.PRESENT) {
+        // Backfill ID if missing using Name Match
+        let finalStudentId = student.studentId;
+        if (!finalStudentId && allStudents.length > 0) {
+            const found = allStudents.find(s => s.name === student.studentName);
+            if (found) finalStudentId = found.studentId;
+        }
+
         details.push({
+          studentId: finalStudentId, // Will now be populated even for old records
           studentName: student.studentName,
           grade: record.grade,
           className: record.className,
@@ -526,4 +698,182 @@ export const getDailyAttendanceReport = async (date: string) => {
   });
 
   return { totalPresent, totalAbsent, totalLate, details };
+};
+
+// --- BEHAVIOR RECORDS & INSIGHTS ---
+
+export const addBehaviorRecord = async (record: BehaviorRecord) => {
+  const { error } = await supabase.from('behavior_records').insert(mapBehaviorToDB(record));
+  if (error) throw new Error(error.message);
+};
+
+export const updateBehaviorRecord = async (record: BehaviorRecord) => {
+  const { error } = await supabase
+    .from('behavior_records')
+    .update(mapBehaviorToDB(record))
+    .eq('id', record.id);
+  if (error) throw new Error(error.message);
+};
+
+export const deleteBehaviorRecord = async (id: string) => {
+  const { error } = await supabase.from('behavior_records').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+};
+
+export const getBehaviorRecords = async (studentId?: string) => {
+  let query = supabase.from('behavior_records').select('*').order('created_at', { ascending: false });
+  
+  if (studentId) {
+    query = query.eq('student_id', studentId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data.map(mapBehaviorFromDB);
+};
+
+export const sendAdminInsight = async (role: 'deputy' | 'counselor', content: string) => {
+  const { error } = await supabase.from('admin_insights').insert({
+    target_role: role,
+    content: content
+  });
+  if (error) throw new Error(error.message);
+};
+
+export const getAdminInsights = async (role: 'deputy' | 'counselor') => {
+  const { data, error } = await supabase
+    .from('admin_insights')
+    .select('*')
+    .eq('target_role', role)
+    .order('created_at', { ascending: false });
+    
+  if (error) throw new Error(error.message);
+  return data.map(mapInsightFromDB);
+};
+
+// --- REFERRALS (ADMIN -> COUNSELOR) ---
+
+export const addReferral = async (referral: Referral) => {
+  const { error } = await supabase.from('referrals').insert(mapReferralToDB(referral));
+  if (error) throw new Error(error.message);
+};
+
+export const getReferrals = async (studentId?: string) => {
+  let query = supabase.from('referrals').select('*').order('referral_date', { ascending: false });
+  
+  if (studentId) {
+    query = query.eq('student_id', studentId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data.map(mapReferralFromDB);
+};
+
+export const updateReferralStatus = async (id: string, status: 'pending' | 'in_progress' | 'resolved') => {
+  const { error } = await supabase
+    .from('referrals')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+};
+
+// --- ALERT RESOLUTION SYSTEM ---
+const RESOLVED_ALERTS_KEY = 'ozr_resolved_alerts';
+
+export const resolveAbsenceAlert = async (studentId: string, actionType: string) => {
+  // 1. Local Storage Update (for immediate UI feedback)
+  const existing = JSON.parse(localStorage.getItem(RESOLVED_ALERTS_KEY) || '[]');
+  const today = new Date().toISOString().split('T')[0];
+  const newAlert: ResolvedAlert = {
+    studentId,
+    dateResolved: today,
+    actionType
+  };
+  
+  // Remove old resolve for this student if exists to update it
+  const filtered = existing.filter((a: ResolvedAlert) => a.studentId !== studentId);
+  localStorage.setItem(RESOLVED_ALERTS_KEY, JSON.stringify([...filtered, newAlert]));
+
+  // 2. If action is "Refer to Counselor", ADD RECORD TO DB
+  if (actionType === 'counselor') {
+      try {
+          // Fetch student info first
+          const student = await getStudentByCivilId(studentId);
+          if (student) {
+              const referral: Referral = {
+                  id: '',
+                  studentId: student.studentId,
+                  studentName: student.name,
+                  grade: student.grade,
+                  className: student.className,
+                  referralDate: today,
+                  reason: 'غياب متصل (تحويل تلقائي من النظام)',
+                  status: 'pending',
+                  referredBy: 'admin'
+              };
+              await addReferral(referral);
+          }
+      } catch (e) {
+          console.error("Failed to sync referral to DB", e);
+      }
+  }
+};
+
+export const getResolvedAlerts = (): ResolvedAlert[] => {
+  return JSON.parse(localStorage.getItem(RESOLVED_ALERTS_KEY) || '[]');
+};
+
+export const getConsecutiveAbsences = async () => {
+  const allRecords = await getAttendanceRecords();
+  const students = await getStudents();
+  
+  // Group by student
+  const studentRecords: Record<string, { date: string, status: AttendanceStatus }[]> = {};
+  
+  allRecords.forEach(rec => {
+    rec.records.forEach(sRecord => {
+      // Find proper student ID if missing
+      let sid = sRecord.studentId;
+      if (!sid) {
+        const found = students.find(s => s.name === sRecord.studentName);
+        if (found) sid = found.studentId;
+      }
+      
+      if (sid) {
+        if (!studentRecords[sid]) studentRecords[sid] = [];
+        studentRecords[sid].push({ date: rec.date, status: sRecord.status });
+      }
+    });
+  });
+
+  const alerts: { studentId: string, studentName: string, days: number, lastDate: string }[] = [];
+  const resolved = getResolvedAlerts();
+
+  Object.entries(studentRecords).forEach(([sid, records]) => {
+    // Sort by date desc
+    records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Check if resolved today
+    const isResolved = resolved.some(r => r.studentId === sid && r.dateResolved === new Date().toISOString().split('T')[0]);
+    if (isResolved) return;
+
+    // Check consecutive logic (check latest 2 records)
+    if (records.length >= 2) {
+      // Ensure records are actually consecutive days (skipping weekends if needed, but simple check for now)
+      if (records[0].status === AttendanceStatus.ABSENT && records[1].status === AttendanceStatus.ABSENT) {
+        const student = students.find(s => s.studentId === sid);
+        if (student) {
+          alerts.push({
+            studentId: sid,
+            studentName: student.name,
+            days: 2, // Minimal consecutive logic for UI
+            lastDate: records[0].date
+          });
+        }
+      }
+    }
+  });
+
+  return alerts;
 };

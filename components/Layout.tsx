@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, PieChart, MessageSquare } from 'lucide-react';
+import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, MessageSquare, BookUser, LayoutGrid, Briefcase, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { StaffUser } from '../types';
 import { getPendingRequestsCountForStaff } from '../services/storage';
 
@@ -13,16 +14,11 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // Desktop Collapse State
   const [pendingCount, setPendingCount] = useState(0);
+  const [staffPermissions, setStaffPermissions] = useState<string[]>([]);
 
   const isActive = (path: string) => location.pathname === path;
-
-  const navLinkClass = (path: string) => `
-    flex items-center gap-3 px-4 py-3.5 rounded-lg transition-colors duration-200 font-medium shrink-0 text-sm md:text-base relative
-    ${isActive(path) 
-      ? 'bg-blue-50 text-blue-900 border-r-4 border-blue-900' 
-      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
-  `;
 
   const SCHOOL_LOGO = localStorage.getItem('school_logo') || "https://www.raed.net/img?id=1471924";
   const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
@@ -32,23 +28,73 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Fetch Pending Count for Staff
+  // Fetch Pending Count for Staff and Permissions
   useEffect(() => {
     if (role === 'staff') {
-      const fetchCount = async () => {
+      const fetchStaffData = async () => {
         const session = localStorage.getItem('ozr_staff_session');
         if (session) {
           const user: StaffUser = JSON.parse(session);
-          const count = await getPendingRequestsCountForStaff(user.assignments || []);
-          setPendingCount(count);
+          
+          // Set permissions (default to basic if empty)
+          setStaffPermissions(user.permissions || ['attendance', 'requests', 'reports']);
+
+          // Only fetch count if user has requests permission
+          if (!user.permissions || user.permissions.includes('requests')) {
+              const count = await getPendingRequestsCountForStaff(user.assignments || []);
+              setPendingCount(count);
+          }
         }
       };
-      fetchCount();
+      fetchStaffData();
+      
       // Poll every 60 seconds
-      const interval = setInterval(fetchCount, 60000);
+      const interval = setInterval(fetchStaffData, 60000);
       return () => clearInterval(interval);
     }
   }, [role]);
+
+  // Helper to check permission
+  const hasPermission = (key: string) => staffPermissions.includes(key);
+
+  const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
+
+  const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
+    <Link 
+      to={to} 
+      className={`
+        flex items-center gap-3 px-4 py-3.5 rounded-lg transition-all duration-200 font-medium relative group
+        ${isActive(to) 
+          ? 'bg-blue-50 text-blue-900' 
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+        ${isSidebarCollapsed ? 'justify-center px-2' : ''}
+      `}
+      title={isSidebarCollapsed ? label : ''}
+    >
+      <Icon size={22} className={`shrink-0 ${isActive(to) ? 'text-blue-900' : 'text-slate-500 group-hover:text-slate-800'}`} />
+      
+      {!isSidebarCollapsed && (
+        <span className="truncate transition-opacity duration-300">{label}</span>
+      )}
+
+      {/* Badge Logic */}
+      {badge !== undefined && badge > 0 && (
+        <span className={`
+          absolute bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm
+          ${isSidebarCollapsed 
+            ? 'top-2 right-2 w-4 h-4 border-2 border-white' 
+            : 'right-4 top-1/2 -translate-y-1/2 px-2 py-0.5 min-w-[20px]'}
+        `}>
+          {badge}
+        </span>
+      )}
+      
+      {/* Active Indicator Bar */}
+      {isActive(to) && (
+        <div className="absolute left-0 top-2 bottom-2 w-1 bg-blue-900 rounded-r-full"></div>
+      )}
+    </Link>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden">
@@ -68,9 +114,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
       {/* Sidebar Navigation */}
       <aside className={`
-        fixed md:relative top-0 h-full w-72 bg-white border-l border-slate-200 shadow-2xl md:shadow-lg z-40
-        transition-transform duration-300 ease-in-out flex flex-col
-        ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+        fixed md:relative top-0 h-full bg-white border-l border-slate-200 shadow-xl md:shadow-none z-40
+        transition-all duration-300 ease-in-out flex flex-col
+        ${isMobileMenuOpen ? 'translate-x-0 w-72' : 'translate-x-full md:translate-x-0'}
+        ${isSidebarCollapsed ? 'md:w-20' : 'md:w-72'}
         right-0
       `}>
         {/* Mobile Close Button */}
@@ -80,126 +127,115 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
            </button>
         </div>
 
-        {/* Header Section - Fixed */}
-        <div className="p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3 shrink-0">
-          <img src={SCHOOL_LOGO} alt="School Logo" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-sm hover:scale-105 transition-transform" />
-          <div>
-            <h1 className="font-extrabold text-blue-900 text-base md:text-lg leading-tight px-2">{SCHOOL_NAME}</h1>
-            <p className="text-xs text-amber-600 font-semibold mt-1">نظام إدارة الغياب والأعذار</p>
-          </div>
+        {/* Desktop Toggle Button */}
+        <button 
+          onClick={toggleSidebar}
+          className="hidden md:flex absolute -left-3 top-8 bg-white border border-slate-200 rounded-full p-1 text-slate-400 hover:text-blue-900 hover:border-blue-300 shadow-sm z-50 transition-colors"
+        >
+          {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        {/* Header Section */}
+        <div className={`p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3 shrink-0 transition-all ${isSidebarCollapsed ? 'py-4 px-2' : ''}`}>
+          <img src={SCHOOL_LOGO} alt="School Logo" className={`object-contain drop-shadow-sm transition-all ${isSidebarCollapsed ? 'w-10 h-10' : 'w-20 h-20'}`} />
+          {!isSidebarCollapsed && (
+            <div className="animate-fade-in">
+              <h1 className="font-extrabold text-blue-900 text-base leading-tight px-2">{SCHOOL_NAME}</h1>
+              <p className="text-[10px] text-amber-600 font-bold mt-1 uppercase tracking-wider">نظام الإدارة الذكي</p>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Navigation Links */}
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-200 pb-20 md:pb-4">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-slate-200 pb-20 md:pb-4">
+          
           {role === 'public' && (
             <>
-              <Link to="/" className={navLinkClass('/')}>
-                <Home size={20} />
-                <span>الرئيسية</span>
-              </Link>
-              <Link to="/submit" className={navLinkClass('/submit')}>
-                <FileText size={20} />
-                <span>تقديم عذر</span>
-              </Link>
-              <Link to="/inquiry" className={navLinkClass('/inquiry')}>
-                <Search size={20} />
-                <span>استعلام عن طالب</span>
-              </Link>
-              <div className="border-t border-slate-100 my-4 shrink-0"></div>
-              <Link to="/staff/login" className={navLinkClass('/staff/login')}>
-                <Users size={20} />
-                <span>دخول المعلمين</span>
-              </Link>
-              <Link to="/admin/login" className={navLinkClass('/admin/login')}>
-                <ShieldCheck size={20} />
-                <span>بوابة الإدارة</span>
-              </Link>
+              <NavItem to="/" icon={Home} label="الرئيسية" />
+              <NavItem to="/submit" icon={FileText} label="تقديم عذر" />
+              <NavItem to="/inquiry" icon={Search} label="استعلام عن طالب" />
+              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              <NavItem to="/staff/login" icon={Users} label="دخول المعلمين" />
+              <NavItem to="/admin/login" icon={ShieldCheck} label="بوابة الإدارة" />
             </>
           )}
 
           {role === 'admin' && (
             <>
-              <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">لوحة التحكم</div>
-              <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>
-                <Home size={20} />
-                <span>نظرة عامة</span>
-              </Link>
-              <Link to="/admin/attendance-stats" className={navLinkClass('/admin/attendance-stats')}>
-                <PieChart size={20} />
-                <span>الإحصائيات والتحليلات</span>
-              </Link>
-              <Link to="/admin/attendance-reports" className={navLinkClass('/admin/attendance-reports')}>
-                <BarChart2 size={20} />
-                <span>سجل الغياب اليومي</span>
-              </Link>
-              <Link to="/admin/requests" className={navLinkClass('/admin/requests')}>
-                <FileText size={20} />
-                <span>طلبات الأعذار</span>
-              </Link>
-              <Link to="/admin/students" className={navLinkClass('/admin/students')}>
-                <Search size={20} />
-                <span>الطلاب والبيانات</span>
-              </Link>
-              <Link to="/admin/users" className={navLinkClass('/admin/users')}>
-                <Users size={20} />
-                <span>إدارة المستخدمين</span>
-              </Link>
+              {!isSidebarCollapsed && <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">لوحة التحكم</div>}
               
-              <div className="border-t border-slate-100 my-4 shrink-0"></div>
+              <NavItem to="/admin/dashboard" icon={LayoutGrid} label="مركز القيادة" />
+              <NavItem to="/admin/requests" icon={FileText} label="طلبات الأعذار" />
+              <NavItem to="/admin/attendance-reports" icon={BarChart2} label="سجل الغياب اليومي" />
+              <NavItem to="/admin/attendance-stats" icon={MessageSquare} label="الإحصائيات والتحليل" />
+              <NavItem to="/admin/students" icon={Search} label="الطلاب والبيانات" />
+              <NavItem to="/admin/users" icon={Users} label="إدارة المستخدمين" />
+              
+              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              
               <button 
                 onClick={onLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                title="تسجيل خروج"
               >
-                <LogOut size={20} />
-                <span>تسجيل خروج</span>
+                <LogOut size={22} className="shrink-0" />
+                {!isSidebarCollapsed && <span>تسجيل خروج</span>}
               </button>
             </>
           )}
 
           {role === 'staff' && (
             <>
-               <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">بوابة المعلم</div>
-               <Link to="/staff/attendance" className={navLinkClass('/staff/attendance')}>
-                <ClipboardCheck size={20} />
-                <span>رصد الغياب والتأخر</span>
-              </Link>
-              <Link to="/staff/requests" className={navLinkClass('/staff/requests')}>
-                <MessageSquare size={20} />
-                <div className="flex items-center justify-between w-full">
-                  <span>طلبات الأعذار</span>
-                  {pendingCount > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
-                      {pendingCount}
-                    </span>
-                  )}
-                </div>
-              </Link>
-              <Link to="/staff/reports" className={navLinkClass('/staff/reports')}>
-                <BarChart2 size={20} />
-                <span>تقاريري</span>
-              </Link>
-              <div className="border-t border-slate-100 my-4 shrink-0"></div>
+               {!isSidebarCollapsed && <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">بوابة المعلم</div>}
+               
+               <NavItem to="/staff/home" icon={Home} label="القائمة الرئيسية" />
+
+               {hasPermission('attendance') && (
+                 <NavItem to="/staff/attendance" icon={ClipboardCheck} label="رصد الغياب" />
+               )}
+
+               {hasPermission('requests') && (
+                 <NavItem to="/staff/requests" icon={MessageSquare} label="طلبات الأعذار" badge={pendingCount} />
+               )}
+
+               {hasPermission('students') && (
+                 <NavItem to="/staff/students" icon={BookUser} label="دليل الطلاب" />
+               )}
+
+               {hasPermission('deputy') && (
+                 <NavItem to="/staff/deputy" icon={Briefcase} label="وكيل الشؤون" />
+               )}
+
+               {hasPermission('reports') && (
+                 <NavItem to="/staff/reports" icon={BarChart2} label="تقاريري" />
+               )}
+
+              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              
               <button 
                 onClick={onLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                title="تسجيل خروج"
               >
-                <LogOut size={20} />
-                <span>تسجيل خروج</span>
+                <LogOut size={22} className="shrink-0" />
+                {!isSidebarCollapsed && <span>تسجيل خروج</span>}
               </button>
             </>
           )}
         </nav>
 
         {/* Footer Info - Fixed at Bottom */}
-        <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-100 shrink-0 hidden md:block">
-          <p>© 2024 نظام عذر المدرسي</p>
-          <p className="text-amber-600 font-bold mt-1 truncate px-2">{SCHOOL_NAME}</p>
-        </div>
+        {!isSidebarCollapsed && (
+          <div className="p-4 text-center text-[10px] text-slate-400 bg-slate-50/50 border-t border-slate-100 shrink-0 hidden md:block">
+            <p>© 2024 نظام عذر</p>
+            <p className="text-blue-800 font-bold mt-0.5 truncate px-2">{SCHOOL_NAME}</p>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full bg-slate-50/50 relative w-full">
-        <div className="max-w-6xl mx-auto pb-20 md:pb-10">
+      <main className="flex-1 p-4 md:p-6 overflow-y-auto h-full bg-slate-50/50 relative w-full custom-scrollbar">
+        <div className="max-w-7xl mx-auto pb-20 md:pb-10">
           {children}
         </div>
       </main>

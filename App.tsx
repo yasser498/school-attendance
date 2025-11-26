@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -12,9 +13,13 @@ import Users from './pages/admin/Users'; // Admin Users Management
 import AttendanceReports from './pages/admin/AttendanceReports'; // New Attendance Reports
 import AttendanceStats from './pages/admin/AttendanceStats'; // New Attendance Stats Page
 import StaffLogin from './pages/staff/Login'; // Staff Login
+import StaffHome from './pages/staff/Home'; // New Staff Home (Dashboard)
 import Attendance from './pages/staff/Attendance'; // Staff Attendance
 import StaffReports from './pages/staff/Reports'; // Staff Reports
 import StaffRequests from './pages/staff/Requests'; // Staff Requests
+import StaffStudents from './pages/staff/Students'; // Staff Students List (New)
+import StaffDeputy from './pages/staff/Deputy'; // Staff Deputy
+import { StaffUser } from './types';
 
 // Protected Route for Admin
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -25,12 +30,32 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Protected Route for Staff
-const ProtectedStaffRoute = ({ children }: { children?: React.ReactNode }) => {
+// Protected Route for Staff with Permission Check
+const ProtectedStaffRoute = ({ 
+    children, 
+    requiredPermission 
+}: { 
+    children?: React.ReactNode, 
+    requiredPermission?: string 
+}) => {
   const session = localStorage.getItem('ozr_staff_session');
+  
   if (!session) {
     return <Navigate to="/staff/login" replace />;
   }
+
+  // Permission Check
+  if (requiredPermission) {
+    const user: StaffUser = JSON.parse(session);
+    // Default to basic permissions if undefined (Backward compatibility)
+    const perms = user.permissions || ['attendance', 'requests', 'reports'];
+    
+    if (!perms.includes(requiredPermission)) {
+        // IMPROVED: Redirect to Staff Home instead of showing dead end
+        return <Navigate to="/staff/home" replace />;
+    }
+  }
+
   return <>{children}</>;
 };
 
@@ -82,10 +107,13 @@ const AppContent = () => {
         <Route path="/admin/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
         <Route path="/admin/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
         
-        {/* Staff Routes */}
-        <Route path="/staff/attendance" element={<ProtectedStaffRoute><Attendance /></ProtectedStaffRoute>} />
-        <Route path="/staff/reports" element={<ProtectedStaffRoute><StaffReports /></ProtectedStaffRoute>} />
-        <Route path="/staff/requests" element={<ProtectedStaffRoute><StaffRequests /></ProtectedStaffRoute>} />
+        {/* Staff Routes - Now secured with permissions */}
+        <Route path="/staff/home" element={<ProtectedStaffRoute><StaffHome /></ProtectedStaffRoute>} />
+        <Route path="/staff/attendance" element={<ProtectedStaffRoute requiredPermission="attendance"><Attendance /></ProtectedStaffRoute>} />
+        <Route path="/staff/reports" element={<ProtectedStaffRoute requiredPermission="reports"><StaffReports /></ProtectedStaffRoute>} />
+        <Route path="/staff/requests" element={<ProtectedStaffRoute requiredPermission="requests"><StaffRequests /></ProtectedStaffRoute>} />
+        <Route path="/staff/students" element={<ProtectedStaffRoute requiredPermission="students"><StaffStudents /></ProtectedStaffRoute>} />
+        <Route path="/staff/deputy" element={<ProtectedStaffRoute requiredPermission="deputy"><StaffDeputy /></ProtectedStaffRoute>} />
         
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

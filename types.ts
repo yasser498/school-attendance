@@ -1,3 +1,4 @@
+
 export enum RequestStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
@@ -47,6 +48,7 @@ export interface StaffUser {
   name: string;
   passcode: string; // Changed: Passcode only
   assignments: ClassAssignment[]; // Changed: Support multiple classes
+  permissions?: string[]; // New: List of allowed feature keys
 }
 
 export enum AttendanceStatus {
@@ -66,4 +68,50 @@ export interface AttendanceRecord {
     studentName: string;
     status: AttendanceStatus;
   }[];
+}
+
+export interface ResolvedAlert {
+  studentId: string;
+  dateResolved: string;
+  actionType: string; // 'call', 'counselor', 'warning'
+}
+
+// --- Behavior System Types ---
+
+export interface BehaviorRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  date: string;
+  violationDegree: string; // First, Second, Third...
+  violationName: string;
+  articleNumber: string;
+  actionTaken: string;
+  notes?: string;
+  staffId?: string;
+  createdAt?: string;
+}
+
+export interface AdminInsight {
+  id: string;
+  targetRole: 'deputy' | 'counselor';
+  content: string;
+  createdAt: string;
+  isRead: boolean;
+}
+
+export interface Referral {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  referralDate: string;
+  reason: string;
+  status: 'pending' | 'in_progress' | 'resolved';
+  referredBy: string;
+  notes?: string;
+  createdAt?: string;
 }

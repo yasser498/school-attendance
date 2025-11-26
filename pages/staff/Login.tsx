@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowRight, KeyRound, Loader2 } from 'lucide-react';
@@ -18,7 +19,8 @@ const StaffLogin: React.FC = () => {
       const user = await authenticateStaff(passcode);
       if (user) {
         localStorage.setItem('ozr_staff_session', JSON.stringify(user));
-        navigate('/staff/attendance');
+        // Redirect to the new Smart Home Dashboard
+        navigate('/staff/home');
       } else {
         setError('رمز الدخول غير صحيح');
       }

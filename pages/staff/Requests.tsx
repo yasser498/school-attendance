@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Eye, Calendar, Search, User, FileText, RefreshCw, Loader2, MessageCircle, School, Paperclip } from 'lucide-react';
-import { getRequests, updateRequestStatus } from '../../services/storage';
-import { RequestStatus, ExcuseRequest, StaffUser } from '../../types';
+import { Check, X, Eye, Calendar, Search, User, FileText, RefreshCw, Loader2, MessageCircle, School, Paperclip, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { getRequests, updateRequestStatus, getStudentAttendanceHistory } from '../../services/storage';
+import { RequestStatus, ExcuseRequest, StaffUser, AttendanceStatus } from '../../types';
 
 const StaffRequests: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +13,11 @@ const StaffRequests: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReq, setSelectedReq] = useState<ExcuseRequest | null>(null);
   const [filter, setFilter] = useState<RequestStatus | 'ALL'>('ALL');
+
+  // History State
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [studentHistory, setStudentHistory] = useState<{ date: string, status: AttendanceStatus }[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem('ozr_staff_session');
@@ -47,6 +52,17 @@ const StaffRequests: React.FC = () => {
     fetchRequests();
   }, [currentUser]);
 
+  // Fetch History when selectedReq changes
+  useEffect(() => {
+    if (selectedReq) {
+      setLoadingHistory(true);
+      getStudentAttendanceHistory(selectedReq.studentId, selectedReq.grade, selectedReq.className)
+        .then(setStudentHistory)
+        .catch(e => console.error(e))
+        .finally(() => setLoadingHistory(false));
+    }
+  }, [selectedReq]);
+
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     // Optimistic update
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
@@ -71,21 +87,34 @@ const StaffRequests: React.FC = () => {
     });
   }, [requests, filter, searchTerm]);
 
+  // Counts for Tabs
+  const counts = useMemo(() => {
+    return {
+      ALL: requests.length,
+      [RequestStatus.PENDING]: requests.filter(r => r.status === RequestStatus.PENDING).length,
+      [RequestStatus.APPROVED]: requests.filter(r => r.status === RequestStatus.APPROVED).length,
+      [RequestStatus.REJECTED]: requests.filter(r => r.status === RequestStatus.REJECTED).length,
+    };
+  }, [requests]);
+
   const statusStyles = {
-    [RequestStatus.PENDING]: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', label: 'قيد المراجعة' },
-    [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', label: 'تم القبول' },
-    [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', label: 'مرفوض' },
+    [RequestStatus.PENDING]: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', border: 'border-amber-200', label: 'قيد المراجعة' },
+    [RequestStatus.APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-emerald-200', label: 'تم القبول' },
+    [RequestStatus.REJECTED]: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-red-200', label: 'مرفوض' },
   };
 
-  // Helper to check if attachment is an image (Fixed regex for query params)
+  // Fixed regex to handle query params in URL
   const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url);
 
+  // --- Virtualized Row Component ---
+  // ... (Using same list logic if needed, but here simple grid is used)
+  
   if (!currentUser) return null;
 
   return (
     <div className="space-y-8 pb-12 animate-fade-in">
-      {/* Header */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6">
+      {/* Header & Controls */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
@@ -96,7 +125,7 @@ const StaffRequests: React.FC = () => {
           <div className="flex items-center gap-2 w-full md:w-auto">
              <button 
                onClick={() => fetchRequests(true)}
-               className="bg-slate-100 text-slate-600 p-2.5 rounded-xl hover:bg-slate-200 transition-colors"
+               className="bg-slate-100 text-slate-600 p-2.5 rounded-xl hover:bg-slate-200 transition-colors shrink-0"
                title="تحديث القائمة"
              >
                <RefreshCw size={20} className={loading ? 'animate-spin' : ''}/>
@@ -247,6 +276,45 @@ const StaffRequests: React.FC = () => {
                           {statusStyles[selectedReq.status].label}
                        </span>
                     </div>
+                 </div>
+
+                 {/* New Collapsible Section for Attendance History */}
+                 <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <button 
+                        onClick={() => setHistoryOpen(!historyOpen)}
+                        className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700"
+                    >
+                        <div className="flex items-center gap-2">
+                            <History size={16} className="text-slate-400"/>
+                            سجل الحضور والغياب
+                        </div>
+                        {historyOpen ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                    </button>
+                    
+                    {historyOpen && (
+                        <div className="p-3 bg-white max-h-48 overflow-y-auto custom-scrollbar border-t border-slate-200">
+                            {loadingHistory ? (
+                                <div className="flex justify-center p-4"><Loader2 size={20} className="animate-spin text-slate-400"/></div>
+                            ) : studentHistory.length > 0 ? (
+                                <div className="space-y-1">
+                                    {studentHistory.map((rec, idx) => (
+                                        <div key={idx} className="flex justify-between items-center text-xs p-2 rounded hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                            <span className="text-slate-600 font-mono">{rec.date}</span>
+                                            <span className={`px-2 py-0.5 rounded font-bold ${
+                                                rec.status === AttendanceStatus.ABSENT ? 'bg-red-50 text-red-600' :
+                                                rec.status === AttendanceStatus.LATE ? 'bg-amber-50 text-amber-600' :
+                                                'bg-emerald-50 text-emerald-600'
+                                            }`}>
+                                                {rec.status === AttendanceStatus.ABSENT ? 'غائب' : rec.status === AttendanceStatus.LATE ? 'متأخر' : 'حاضر'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-center text-xs text-slate-400 py-4">لا يوجد سجلات سابقة مسجلة لهذا الطالب</p>
+                            )}
+                        </div>
+                    )}
                  </div>
 
                  {/* Reason */}

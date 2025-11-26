@@ -120,13 +120,23 @@ const Attendance: React.FC = () => {
   };
 
   const stats = useMemo(() => {
+    const total = students.length;
     const values = Object.values(attendanceMap);
+    
+    const presentCount = values.filter(s => s === AttendanceStatus.PRESENT).length;
+    const absentCount = values.filter(s => s === AttendanceStatus.ABSENT).length;
+    const lateCount = values.filter(s => s === AttendanceStatus.LATE).length;
+
     return {
-      present: values.filter(s => s === AttendanceStatus.PRESENT).length,
-      absent: values.filter(s => s === AttendanceStatus.ABSENT).length,
-      late: values.filter(s => s === AttendanceStatus.LATE).length,
+      present: presentCount,
+      absent: absentCount,
+      late: lateCount,
+      // Calculate Percentages
+      presentPct: total > 0 ? Math.round((presentCount / total) * 100) : 0,
+      absentPct: total > 0 ? Math.round((absentCount / total) * 100) : 0,
+      latePct: total > 0 ? Math.round((lateCount / total) * 100) : 0,
     };
-  }, [attendanceMap]);
+  }, [attendanceMap, students.length]);
 
   if (!currentUser) return null;
 
@@ -191,17 +201,26 @@ const Attendance: React.FC = () => {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-3 gap-3 md:gap-4">
-         <div className="bg-emerald-50 rounded-xl p-3 md:p-4 text-center border border-emerald-100">
-            <span className="block text-xl md:text-2xl font-bold text-emerald-700">{stats.present}</span>
-            <span className="text-[10px] md:text-xs font-bold text-emerald-600">حاضر</span>
+         <div className="bg-emerald-50 rounded-xl p-3 md:p-4 text-center border border-emerald-100 flex flex-col justify-center">
+            <span className="block text-xl md:text-3xl font-bold text-emerald-700">{stats.present}</span>
+            <span className="text-[10px] md:text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">حاضر</span>
+            <span className="text-[10px] bg-white/60 text-emerald-800 px-2 py-0.5 rounded-full w-fit mx-auto font-bold border border-emerald-100">
+               %{stats.presentPct}
+            </span>
          </div>
-         <div className="bg-red-50 rounded-xl p-3 md:p-4 text-center border border-red-100">
-            <span className="block text-xl md:text-2xl font-bold text-red-700">{stats.absent}</span>
-            <span className="text-[10px] md:text-xs font-bold text-red-600">غائب</span>
+         <div className="bg-red-50 rounded-xl p-3 md:p-4 text-center border border-red-100 flex flex-col justify-center">
+            <span className="block text-xl md:text-3xl font-bold text-red-700">{stats.absent}</span>
+            <span className="text-[10px] md:text-xs font-bold text-red-600 uppercase tracking-wider mb-1">غائب</span>
+            <span className="text-[10px] bg-white/60 text-red-800 px-2 py-0.5 rounded-full w-fit mx-auto font-bold border border-red-100">
+               %{stats.absentPct}
+            </span>
          </div>
-         <div className="bg-amber-50 rounded-xl p-3 md:p-4 text-center border border-amber-100">
-            <span className="block text-xl md:text-2xl font-bold text-amber-700">{stats.late}</span>
-            <span className="text-[10px] md:text-xs font-bold text-amber-600">متأخر</span>
+         <div className="bg-amber-50 rounded-xl p-3 md:p-4 text-center border border-amber-100 flex flex-col justify-center">
+            <span className="block text-xl md:text-3xl font-bold text-amber-700">{stats.late}</span>
+            <span className="text-[10px] md:text-xs font-bold text-amber-600 uppercase tracking-wider mb-1">متأخر</span>
+            <span className="text-[10px] bg-white/60 text-amber-800 px-2 py-0.5 rounded-full w-fit mx-auto font-bold border border-amber-100">
+               %{stats.latePct}
+            </span>
          </div>
       </div>
 

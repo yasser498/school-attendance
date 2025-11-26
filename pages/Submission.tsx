@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2, Lock, X } from 'lucide-react';
 import { getStudents, addRequest, uploadFile } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
 import { GRADES } from '../constants';
@@ -13,6 +13,9 @@ const Submission: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  
+  // Lock state to prevent changing student details when redirected from profile
+  const [isLocked, setIsLocked] = useState(false);
 
   // Form State
   const [selectedGrade, setSelectedGrade] = useState('');
@@ -71,6 +74,7 @@ const Submission: React.FC = () => {
         setSelectedGrade(targetStudent.grade);
         setSelectedClass(targetStudent.className);
         setSelectedStudentId(targetStudent.id);
+        setIsLocked(true); // Lock the fields
       }
     }
     if (urlDate) {
@@ -176,6 +180,15 @@ const Submission: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Reset Lock to allow changing student
+  const unlockForm = () => {
+    setIsLocked(false);
+    navigate('/submit'); // Clear params
+    setSelectedGrade('');
+    setSelectedClass('');
+    setSelectedStudentId('');
+  };
+
   // Date Logic (Past 7 days only)
   const today = new Date();
   const maxDate = today.toISOString().split('T')[0];
@@ -183,7 +196,7 @@ const Submission: React.FC = () => {
   minDateObj.setDate(today.getDate() - 7);
   const minDate = minDateObj.toISOString().split('T')[0];
 
-  const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base";
+  const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed";
   const labelClasses = "block text-sm font-bold text-slate-700 mb-2";
 
   if (dataLoading) {
@@ -242,15 +255,38 @@ const Submission: React.FC = () => {
         
         <form onSubmit={handleSubmit} className="p-5 md:p-10 space-y-6 md:space-y-8">
           
+          {/* Locked State Banner */}
+          {isLocked && selectedStudent && (
+             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between animate-fade-in">
+                <div className="flex items-center gap-3">
+                   <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
+                      <Lock size={20} />
+                   </div>
+                   <div>
+                      <p className="text-xs font-bold text-amber-800 uppercase mb-0.5">تقديم عذر محدد للطالب:</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedStudent.name}</p>
+                   </div>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={unlockForm}
+                  className="text-xs bg-white border border-amber-200 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 font-bold transition-colors"
+                >
+                   تغيير الطالب
+                </button>
+             </div>
+          )}
+
           {/* Selection Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <div>
-              <label className={labelClasses}>الصف الدراسي</label>
+              <label className={labelClasses}>الصف الدراسي {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
               <select 
                 required
                 value={selectedGrade}
                 onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); setSelectedStudentId(''); }}
                 className={inputClasses}
+                disabled={isLocked}
               >
                 <option value="">اختر الصف...</option>
                 {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
@@ -258,13 +294,13 @@ const Submission: React.FC = () => {
             </div>
 
             <div>
-              <label className={labelClasses}>الفصل</label>
+              <label className={labelClasses}>الفصل {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
               <select 
                   required
-                  disabled={!selectedGrade}
+                  disabled={!selectedGrade || isLocked}
                   value={selectedClass}
                   onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }}
-                  className={`${inputClasses} disabled:bg-slate-50 disabled:text-slate-400`}
+                  className={inputClasses}
               >
                   <option value="">{selectedGrade ? 'اختر الفصل...' : 'اختر الصف أولاً'}</option>
                   {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
@@ -274,13 +310,13 @@ const Submission: React.FC = () => {
 
           {/* Student Selection */}
           <div>
-            <label className={labelClasses}>اسم الطالب</label>
+            <label className={labelClasses}>اسم الطالب {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
             <select 
               required
-              disabled={!selectedClass}
+              disabled={!selectedClass || isLocked}
               value={selectedStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
-              className={`${inputClasses} disabled:bg-slate-50 disabled:text-slate-400`}
+              className={inputClasses}
             >
               <option value="">اختر الطالب من القائمة...</option>
               {availableStudents.map(s => (

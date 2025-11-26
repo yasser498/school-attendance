@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, User, Phone, MessageCircle, X, Loader2, BookUser, Copy, Check, School, Smartphone, AlertTriangle, Printer, History, ClipboardList, Briefcase, FileWarning, Sparkles, Bell, Inbox, ArrowLeft, LayoutGrid } from 'lucide-react';
-import { getStudents, getResolvedAlerts, getStudentAttendanceHistory, getAttendanceRecords, getAdminInsights, getReferrals, updateReferralStatus } from '../../services/storage';
+import { getStudents, getResolvedAlerts, getStudentAttendanceHistory, getAttendanceRecords, getAdminInsights, getReferrals, updateReferralStatus, getStaffUsers } from '../../services/storage';
 import { Student, StaffUser, AttendanceStatus, ResolvedAlert, AdminInsight, Referral } from '../../types';
 import { GRADES } from '../../constants';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
@@ -49,6 +49,9 @@ const StaffStudents: React.FC = () => {
   
   // Print State
   const [printLetterType, setPrintLetterType] = useState<'counselor' | 'parent' | 'authority' | 'history' | null>(null);
+  
+  // Dynamic Roles for Printing
+  const [deputyName, setDeputyName] = useState('');
 
   // Responsive List
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -76,16 +79,23 @@ const StaffStudents: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [studentsData, attendanceData, insightsData, referralData] = await Promise.all([
+        const [studentsData, attendanceData, insightsData, referralData, allStaff] = await Promise.all([
             getStudents(),
             getAttendanceRecords(),
             getAdminInsights('counselor'),
-            getReferrals()
+            getReferrals(),
+            getStaffUsers()
         ]);
         setStudents(studentsData);
         setInsights(insightsData);
         setReferrals(referralData.filter(r => r.status !== 'resolved'));
         
+        // Find Deputy Name
+        const deputyUser = allStaff.find(u => u.permissions?.includes('deputy'));
+        if (deputyUser) {
+            setDeputyName(deputyUser.name);
+        }
+
         // Calculate Risks
         const risks: RiskCase[] = [];
         const counts: Record<string, { absent: number, late: number }> = {};
@@ -170,7 +180,7 @@ const StaffStudents: React.FC = () => {
 
   const handlePrint = (type: 'counselor' | 'parent' | 'authority' | 'history') => {
     setPrintLetterType(type);
-    // Increased delay to 1500ms to ensure image and layout rendering
+    // Delay ensuring rendering happens before print dialog on mobile
     setTimeout(() => {
         window.print();
         setPrintLetterType(null);
@@ -207,12 +217,12 @@ const StaffStudents: React.FC = () => {
       return { absent: historyAbsent, late: historyLate };
   }, [studentHistory, selectedStudent]);
 
-  // Helper to get dynamic title
+  // Helper to get dynamic title for PARENT SUMMONS (Depends on who is logged in)
   const getUserTitle = () => {
       if (!currentUser) return 'المسؤول الإداري';
       if (currentUser.permissions?.includes('deputy')) return 'وكيل شؤون الطلاب';
-      if (currentUser.permissions?.includes('students')) return 'الموجه الطلابي'; // If counselor logged in
-      return 'وكيل شؤون الطلاب'; // Default fallback
+      if (currentUser.permissions?.includes('students')) return 'الموجه الطلابي'; 
+      return 'وكيل شؤون الطلاب'; 
   };
 
   const Row = ({ index, style }: ListChildComponentProps) => {
@@ -277,9 +287,25 @@ const StaffStudents: React.FC = () => {
         {`
           @media print {
             body * { visibility: hidden; }
-            #staff-print-container, #staff-print-container * { visibility: visible; }
-            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; z-index: 9999; min-height: 100vh; }
-            .no-print { display: none !important; }
+            /* Hide Main App Content */
+            .no-print, .no-print * { display: none !important; }
+            
+            /* Show Print Container */
+            #staff-print-container { 
+                display: block !important; 
+                visibility: visible !important;
+                position: absolute !important; 
+                top: 0 !important; 
+                left: 0 !important; 
+                width: 100% !important; 
+                margin: 0 !important; 
+                padding: 20px !important;
+                z-index: 9999 !important;
+            }
+            #staff-print-container * { 
+                visibility: visible !important; 
+            }
+            @page { size: auto; margin: 0mm; }
           }
         `}
     </style>
@@ -380,9 +406,9 @@ const StaffStudents: React.FC = () => {
 
                 <div className="mt-24 px-12 text-xl">
                     <div className="text-left pl-12">
-                        {/* Referral Sender is usually Deputy/Admin */}
+                        {/* FIXED: Referral Signature is ALWAYS the Deputy (Fetched from DB) or current user as fallback */}
                         <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p className="text-lg font-bold">{currentUser?.name}</p>
+                        <p className="text-lg font-bold">{deputyName || currentUser?.name}</p>
                         <p className="mt-4">التوقيع: .............................</p>
                     </div>
                 </div>
@@ -403,7 +429,7 @@ const StaffStudents: React.FC = () => {
         )}
     </div>
 
-    <div className="space-y-6 pb-20 animate-fade-in relative no-print">
+    <div className="no-print space-y-6 pb-20 animate-fade-in relative">
       {/* Header */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
          <div className="flex items-center gap-3">

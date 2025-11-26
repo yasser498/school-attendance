@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, Phone, MessageCircle, X, Loader2, BookUser, Copy, Check, School, Smartphone, AlertTriangle, Printer, History, ClipboardList, Briefcase, FileWarning, Sparkles, Bell, Inbox } from 'lucide-react';
+import { Search, User, Phone, MessageCircle, X, Loader2, BookUser, Copy, Check, School, Smartphone, AlertTriangle, Printer, History, ClipboardList, Briefcase, FileWarning, Sparkles, Bell, Inbox, ArrowLeft, LayoutGrid } from 'lucide-react';
 import { getStudents, getResolvedAlerts, getStudentAttendanceHistory, getAttendanceRecords, getAdminInsights, getReferrals, updateReferralStatus } from '../../services/storage';
 import { Student, StaffUser, AttendanceStatus, ResolvedAlert, AdminInsight, Referral } from '../../types';
 import { GRADES } from '../../constants';
@@ -22,8 +21,8 @@ const StaffStudents: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // View State
-  const [activeView, setActiveView] = useState<'actions' | 'directory' | 'insights' | 'referrals'>('actions');
+  // View State: 'menu' is the entry point
+  const [activeView, setActiveView] = useState<'menu' | 'actions' | 'directory' | 'insights' | 'referrals'>('menu');
 
   // Risk Analysis State
   const [riskCases, setRiskCases] = useState<RiskCase[]>([]);
@@ -85,7 +84,7 @@ const StaffStudents: React.FC = () => {
         ]);
         setStudents(studentsData);
         setInsights(insightsData);
-        setReferrals(referralData.filter(r => r.status !== 'resolved')); // Only show active
+        setReferrals(referralData.filter(r => r.status !== 'resolved'));
         
         // Calculate Risks
         const risks: RiskCase[] = [];
@@ -135,7 +134,6 @@ const StaffStudents: React.FC = () => {
     fetchData();
   }, []);
 
-  // Handle Referral Completion
   const handleResolveReferral = async (id: string) => {
       if (window.confirm("هل تم الانتهاء من متابعة هذه الحالة؟")) {
           await updateReferralStatus(id, 'resolved');
@@ -151,7 +149,6 @@ const StaffStudents: React.FC = () => {
       }
   };
 
-  // Fetch details when student is selected
   useEffect(() => {
     if (selectedStudent) {
         setLoadingDetails(true);
@@ -266,40 +263,132 @@ const StaffStudents: React.FC = () => {
 
   return (
     <>
-    <div id="staff-print-container" className="hidden"></div>
+    {/* Print Templates */}
+    <style>
+        {`
+          @media print {
+            body * { visibility: hidden; }
+            #staff-print-container, #staff-print-container * { visibility: visible; }
+            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; }
+            .no-print { display: none !important; }
+          }
+        `}
+    </style>
 
-    <div className="space-y-6 pb-20 animate-fade-in relative no-print">
-      {/* Header & Tabs */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-         <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
-                        <BookUser className="text-amber-500" /> منصة التوجيه والإرشاد
-                    </h1>
-                    <p className="text-slate-500 mt-1">متابعة حالات الغياب واتخاذ الإجراءات الإدارية</p>
+    <div id="staff-print-container" className="hidden print:block">
+        {printLetterType === 'parent' && selectedStudent && (
+            <div className="p-8 text-right space-y-8" dir="rtl">
+                <img src="https://www.raed.net/img?id=147320" alt="Header" className="w-full h-auto object-contain mb-8 opacity-90" />
+                
+                <h2 className="text-2xl font-extrabold text-center underline mb-8">إشعار غياب واستدعاء ولي أمر</h2>
+                
+                <div className="text-xl leading-relaxed space-y-6">
+                    <p>المكرم ولي أمر الطالب: <strong>{selectedStudent.name}</strong></p>
+                    <p>الصف: <strong>{selectedStudent.grade} - {selectedStudent.className}</strong></p>
+                    <p>السلام عليكم ورحمة الله وبركاته،،،</p>
+                    <p>نفيدكم بأن ابنكم قد تغيب عن المدرسة لمدة <strong>({currentStudentStats.absent})</strong> أيام خلال هذا الفصل الدراسي، وذلك دون تقديم عذر مقبول.</p>
+                    <p>وحيث أن هذا الغياب يؤثر سلباً على مستواه الدراسي ويعد مخالفة للائحة السلوك والمواظبة، نأمل منكم الحضور للمدرسة يوم ..................... الموافق ...../...../.....هـ لمناقشة أسباب الغياب والتعاون معنا لمعالجة الوضع.</p>
+                    <p>شاكرين لكم تعاونكم وحرصكم على مصلحة ابنكم.</p>
+                </div>
+
+                <div className="flex justify-between mt-24 px-12 text-xl">
+                    <div className="text-center">
+                        <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
+                        <p>{currentUser?.name}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="font-bold mb-4">مدير المدرسة</p>
+                        <p>.............................</p>
+                    </div>
                 </div>
             </div>
+        )}
+        
+        {/* Add other letter templates (counselor/authority) if needed */}
+    </div>
 
-            <div className="flex p-1 bg-slate-100 rounded-xl w-full md:w-fit overflow-x-auto gap-1">
-                <button onClick={() => setActiveView('actions')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === 'actions' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-500'}`}>
-                    <FileWarning size={16} /> الإجراءات التلقائية
-                    <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded-full">{riskCases.length}</span>
-                </button>
-                <button onClick={() => setActiveView('referrals')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === 'referrals' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-500'}`}>
-                    <Inbox size={16} /> المحالة من الإدارة
-                    {referrals.length > 0 && <span className="bg-blue-100 text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full">{referrals.length}</span>}
-                </button>
-                <button onClick={() => setActiveView('directory')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === 'directory' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-500'}`}>
-                    <Smartphone size={16} /> دليل الاتصال
-                </button>
-                <button onClick={() => setActiveView('insights')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === 'insights' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'}`}>
-                    <Sparkles size={16} /> توجيهات الإدارة
-                    {insights.length > 0 && <span className="w-2 h-2 bg-red-500 rounded-full"></span>}
-                </button>
-            </div>
+    <div className="space-y-6 pb-20 animate-fade-in relative no-print">
+      {/* Header */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+         <div className="flex items-center gap-3">
+             <div className="bg-amber-50 p-2 rounded-xl text-amber-600">
+                 <BookUser size={24} />
+             </div>
+             <div>
+                 <h1 className="text-xl font-bold text-slate-900">منصة التوجيه والإرشاد</h1>
+                 <p className="text-xs text-slate-500">متابعة الغياب والانضباط</p>
+             </div>
          </div>
+         {activeView !== 'menu' && (
+             <button 
+                 onClick={() => setActiveView('menu')}
+                 className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-900 bg-slate-50 px-4 py-2 rounded-xl hover:bg-blue-50 transition-colors"
+             >
+                 <LayoutGrid size={16} />
+                 القائمة الرئيسية
+             </button>
+         )}
       </div>
+
+      {/* MENU VIEW */}
+      {activeView === 'menu' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto pt-6">
+              <button onClick={() => setActiveView('actions')} className="group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-red-300 transition-all text-right relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+                  <div className="relative z-10">
+                      <div className="w-12 h-12 bg-red-600 text-white rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-red-200">
+                          <FileWarning size={24} />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">الإجراءات التلقائية</h3>
+                      <p className="text-slate-500 text-xs">الطلاب المتجاوزين لحد الغياب المسموح.</p>
+                      <div className="mt-4 flex justify-end">
+                          <span className="bg-red-100 text-red-700 text-xs font-bold px-3 py-1 rounded-full">{riskCases.length} حالة</span>
+                      </div>
+                  </div>
+              </button>
+
+              <button onClick={() => setActiveView('referrals')} className="group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all text-right relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+                  <div className="relative z-10">
+                      <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-blue-200">
+                          <Inbox size={24} />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">المحالة من الإدارة</h3>
+                      <p className="text-slate-500 text-xs">الحالات المحولة من المدير للمتابعة.</p>
+                      <div className="mt-4 flex justify-end">
+                          <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">{referrals.length} حالة</span>
+                      </div>
+                  </div>
+              </button>
+
+              <button onClick={() => setActiveView('directory')} className="group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-emerald-300 transition-all text-right relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+                  <div className="relative z-10">
+                      <div className="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-200">
+                          <Smartphone size={24} />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">دليل الاتصال</h3>
+                      <p className="text-slate-500 text-xs">البحث عن طالب والتواصل مع ولي الأمر.</p>
+                  </div>
+              </button>
+
+              <button onClick={() => setActiveView('insights')} className="group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-purple-300 transition-all text-right relative overflow-hidden lg:col-span-3">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-purple-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-purple-200 shrink-0">
+                              <Sparkles size={24} />
+                          </div>
+                          <div>
+                              <h3 className="text-lg font-bold text-slate-800 mb-1">توجيهات الإدارة الذكية</h3>
+                              <p className="text-slate-500 text-xs">التقارير والتحليلات المرسلة من مدير المدرسة.</p>
+                          </div>
+                      </div>
+                      {insights.length > 0 && <span className="bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-full">رسائل جديدة</span>}
+                  </div>
+              </button>
+          </div>
+      )}
 
       {/* VIEW 1: Administrative Actions */}
       {activeView === 'actions' && (

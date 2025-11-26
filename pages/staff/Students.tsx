@@ -170,10 +170,11 @@ const StaffStudents: React.FC = () => {
 
   const handlePrint = (type: 'counselor' | 'parent' | 'authority' | 'history') => {
     setPrintLetterType(type);
+    // Increased delay to 1500ms to ensure image and layout rendering
     setTimeout(() => {
         window.print();
         setPrintLetterType(null);
-    }, 500); // Slightly longer delay to ensure render
+    }, 1500); 
   };
 
   const availableClasses = useMemo(() => {
@@ -205,6 +206,14 @@ const StaffStudents: React.FC = () => {
       const historyLate = studentHistory.filter(r => r.status === AttendanceStatus.LATE).length;
       return { absent: historyAbsent, late: historyLate };
   }, [studentHistory, selectedStudent]);
+
+  // Helper to get dynamic title
+  const getUserTitle = () => {
+      if (!currentUser) return 'المسؤول الإداري';
+      if (currentUser.permissions?.includes('deputy')) return 'وكيل شؤون الطلاب';
+      if (currentUser.permissions?.includes('students')) return 'الموجه الطلابي'; // If counselor logged in
+      return 'وكيل شؤون الطلاب'; // Default fallback
+  };
 
   const Row = ({ index, style }: ListChildComponentProps) => {
     const student = filteredStudents[index];
@@ -269,7 +278,7 @@ const StaffStudents: React.FC = () => {
           @media print {
             body * { visibility: hidden; }
             #staff-print-container, #staff-print-container * { visibility: visible; }
-            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; z-index: 9999; }
+            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; z-index: 9999; min-height: 100vh; }
             .no-print { display: none !important; }
           }
         `}
@@ -280,7 +289,8 @@ const StaffStudents: React.FC = () => {
         {/* Parent Summons Template */}
         {printLetterType === 'parent' && selectedStudent && (
             <div className="p-8 text-right space-y-8" dir="rtl">
-                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-full h-auto object-contain mb-4" />
+                {/* Logo Resized */}
+                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-48 h-auto object-contain mb-4 mx-auto" />
                 
                 <h2 className="text-2xl font-extrabold text-center underline mb-8">إشعار غياب واستدعاء ولي أمر</h2>
                 
@@ -316,8 +326,9 @@ const StaffStudents: React.FC = () => {
 
                 <div className="flex justify-between mt-24 px-12 text-xl">
                     <div className="text-center">
-                        <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p className="text-lg">{currentUser?.name}</p>
+                        {/* Dynamic Title based on User Role */}
+                        <p className="font-bold mb-4">{getUserTitle()}</p>
+                        <p className="text-lg font-bold">{currentUser?.name}</p>
                     </div>
                     <div className="text-center">
                         <p className="font-bold mb-4">مدير المدرسة</p>
@@ -334,7 +345,8 @@ const StaffStudents: React.FC = () => {
         {/* Counselor Referral Template */}
         {printLetterType === 'counselor' && selectedStudent && (
             <div className="p-8 text-right space-y-8" dir="rtl">
-                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-full h-auto object-contain mb-4" />
+                {/* Logo Resized */}
+                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-48 h-auto object-contain mb-4 mx-auto" />
                 
                 <h2 className="text-2xl font-extrabold text-center underline mb-8">نموذج إحالة للموجه الطلابي</h2>
                 
@@ -368,8 +380,9 @@ const StaffStudents: React.FC = () => {
 
                 <div className="mt-24 px-12 text-xl">
                     <div className="text-left pl-12">
+                        {/* Referral Sender is usually Deputy/Admin */}
                         <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p className="text-lg">{currentUser?.name}</p>
+                        <p className="text-lg font-bold">{currentUser?.name}</p>
                         <p className="mt-4">التوقيع: .............................</p>
                     </div>
                 </div>
@@ -380,7 +393,14 @@ const StaffStudents: React.FC = () => {
             </div>
         )}
         
-        {/* Add other letter templates (authority) if needed */}
+        {/* Authority Referral Template (Optional) */}
+        {printLetterType === 'authority' && selectedStudent && (
+             <div className="p-8 text-right space-y-8" dir="rtl">
+                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-48 h-auto object-contain mb-4 mx-auto" />
+                <h2 className="text-2xl font-extrabold text-center underline mb-8">إحالة للجهات المختصة</h2>
+                <p className="text-center text-xl">نموذج رسمي لإدارة التعليم (قيد التنفيذ)</p>
+             </div>
+        )}
     </div>
 
     <div className="space-y-6 pb-20 animate-fade-in relative no-print">

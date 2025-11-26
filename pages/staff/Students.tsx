@@ -173,7 +173,7 @@ const StaffStudents: React.FC = () => {
     setTimeout(() => {
         window.print();
         setPrintLetterType(null);
-    }, 100);
+    }, 500); // Slightly longer delay to ensure render
   };
 
   const availableClasses = useMemo(() => {
@@ -269,42 +269,118 @@ const StaffStudents: React.FC = () => {
           @media print {
             body * { visibility: hidden; }
             #staff-print-container, #staff-print-container * { visibility: visible; }
-            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; }
+            #staff-print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; z-index: 9999; }
             .no-print { display: none !important; }
           }
         `}
     </style>
 
     <div id="staff-print-container" className="hidden print:block">
+        
+        {/* Parent Summons Template */}
         {printLetterType === 'parent' && selectedStudent && (
             <div className="p-8 text-right space-y-8" dir="rtl">
-                <img src="https://www.raed.net/img?id=147320" alt="Header" className="w-full h-auto object-contain mb-8 opacity-90" />
+                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-full h-auto object-contain mb-4" />
                 
                 <h2 className="text-2xl font-extrabold text-center underline mb-8">إشعار غياب واستدعاء ولي أمر</h2>
                 
-                <div className="text-xl leading-relaxed space-y-6">
-                    <p>المكرم ولي أمر الطالب: <strong>{selectedStudent.name}</strong></p>
-                    <p>الصف: <strong>{selectedStudent.grade} - {selectedStudent.className}</strong></p>
+                {/* Student Data Grid */}
+                <div className="border-2 border-black mb-8">
+                    <div className="grid grid-cols-2">
+                        <div className="border-b border-l border-black p-2 bg-gray-100 font-bold">اسم الطالب</div>
+                        <div className="border-b border-black p-2 font-bold">{selectedStudent.name}</div>
+                        
+                        <div className="border-b border-l border-black p-2 bg-gray-100 font-bold">الصف والفصل</div>
+                        <div className="border-b border-black p-2">{selectedStudent.grade} - {selectedStudent.className}</div>
+                        
+                        <div className="border-l border-black p-2 bg-gray-100 font-bold">رقم الهوية</div>
+                        <div className="p-2 font-mono">{selectedStudent.studentId}</div>
+                    </div>
+                </div>
+
+                <div className="text-xl leading-relaxed space-y-6 font-medium">
+                    <p>المكرم ولي أمر الطالب.. وفقه الله</p>
                     <p>السلام عليكم ورحمة الله وبركاته،،،</p>
-                    <p>نفيدكم بأن ابنكم قد تغيب عن المدرسة لمدة <strong>({currentStudentStats.absent})</strong> أيام خلال هذا الفصل الدراسي، وذلك دون تقديم عذر مقبول.</p>
-                    <p>وحيث أن هذا الغياب يؤثر سلباً على مستواه الدراسي ويعد مخالفة للائحة السلوك والمواظبة، نأمل منكم الحضور للمدرسة يوم ..................... الموافق ...../...../.....هـ لمناقشة أسباب الغياب والتعاون معنا لمعالجة الوضع.</p>
-                    <p>شاكرين لكم تعاونكم وحرصكم على مصلحة ابنكم.</p>
+                    <p>
+                        نفيدكم بأن ابنكم الموضح بياناته أعلاه قد تكرر غيابه عن المدرسة حيث بلغ مجموع أيام غيابه 
+                        <strong> ({currentStudentStats.absent}) </strong> أيام خلال هذا الفصل الدراسي، 
+                        وذلك دون تقديم عذر مقبول لإدارة المدرسة.
+                    </p>
+                    <p>
+                        وحيث أن هذا الغياب يؤثر سلباً على مستواه الدراسي وتحصيله العلمي، ويعد مخالفة صريحة لقواعد السلوك والمواظبة،
+                        نأمل منكم الحضور للمدرسة يوم ..................... الموافق ...../...../.....هـ 
+                        لمناقشة أسباب الغياب والتعاون معنا لمعالجة الوضع قبل تفاقمه.
+                    </p>
+                    <p>شاكرين لكم حسن تعاونكم وحرصكم على مصلحة ابنكم.</p>
                 </div>
 
                 <div className="flex justify-between mt-24 px-12 text-xl">
                     <div className="text-center">
                         <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p>{currentUser?.name}</p>
+                        <p className="text-lg">{currentUser?.name}</p>
                     </div>
                     <div className="text-center">
                         <p className="font-bold mb-4">مدير المدرسة</p>
-                        <p>.............................</p>
+                        <p className="text-lg">.............................</p>
                     </div>
+                </div>
+                
+                <div className="mt-12 text-center text-sm text-gray-500 border-t pt-4">
+                    حرر بتاريخ: {new Date().toLocaleDateString('ar-SA')}
+                </div>
+            </div>
+        )}
+
+        {/* Counselor Referral Template */}
+        {printLetterType === 'counselor' && selectedStudent && (
+            <div className="p-8 text-right space-y-8" dir="rtl">
+                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-full h-auto object-contain mb-4" />
+                
+                <h2 className="text-2xl font-extrabold text-center underline mb-8">نموذج إحالة للموجه الطلابي</h2>
+                
+                {/* Student Data Grid */}
+                <div className="border-2 border-black mb-8">
+                    <div className="grid grid-cols-2">
+                        <div className="border-b border-l border-black p-2 bg-gray-100 font-bold">اسم الطالب</div>
+                        <div className="border-b border-black p-2 font-bold">{selectedStudent.name}</div>
+                        
+                        <div className="border-b border-l border-black p-2 bg-gray-100 font-bold">الصف والفصل</div>
+                        <div className="border-b border-black p-2">{selectedStudent.grade} - {selectedStudent.className}</div>
+                        
+                        <div className="border-l border-black p-2 bg-gray-100 font-bold">عدد أيام الغياب</div>
+                        <div className="p-2 font-bold">{currentStudentStats.absent} أيام</div>
+                    </div>
+                </div>
+
+                <div className="text-xl leading-relaxed space-y-6 font-medium">
+                    <p>المكرم الموجه الطلابي بالمدرسة.. وفقه الله</p>
+                    <p>السلام عليكم ورحمة الله وبركاته،،،</p>
+                    <p>
+                        نحيل إليكم الطالب الموضح بياناته أعلاه، وذلك نظراً لتكرار غيابه عن المدرسة وتجاوزه الحد الذي يستدعي التدخل التربوي والإرشادي.
+                    </p>
+                    <p>
+                        نأمل منكم الجلوس مع الطالب ودراسة حالته للتعرف على الأسباب الحقيقية وراء هذا الغياب، 
+                        واتخاذ الإجراءات التربوية المناسبة لمساعدته على الانتظام في الدراسة وتحسين سلوك المواظبة لديه.
+                    </p>
+                    <p>كما نرجو إفادتنا بما يتم اتخاذه من إجراءات ونتائج المتابعة.</p>
+                    <p>ولكم جزيل الشكر،،،</p>
+                </div>
+
+                <div className="mt-24 px-12 text-xl">
+                    <div className="text-left pl-12">
+                        <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
+                        <p className="text-lg">{currentUser?.name}</p>
+                        <p className="mt-4">التوقيع: .............................</p>
+                    </div>
+                </div>
+                
+                <div className="mt-12 text-center text-sm text-gray-500 border-t pt-4">
+                    حرر بتاريخ: {new Date().toLocaleDateString('ar-SA')}
                 </div>
             </div>
         )}
         
-        {/* Add other letter templates (counselor/authority) if needed */}
+        {/* Add other letter templates (authority) if needed */}
     </div>
 
     <div className="space-y-6 pb-20 animate-fade-in relative no-print">

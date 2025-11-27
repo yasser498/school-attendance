@@ -1,21 +1,22 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, School, Copy, Check, CalendarDays, AlertCircle, ArrowLeft, Loader2, PieChart, LayoutList, History, FileText, AlertTriangle, FileWarning } from 'lucide-react';
-import { getStudentByCivilId, getRequestsByStudentId, getStudentAttendanceHistory, getBehaviorRecords } from '../services/storage';
-import { Student, ExcuseRequest, RequestStatus, AttendanceStatus, BehaviorRecord } from '../types';
+import { Search, User, School, Copy, Check, CalendarDays, AlertCircle, ArrowLeft, Loader2, PieChart, LayoutList, History, FileText, AlertTriangle, FileWarning, MessageSquare } from 'lucide-react';
+import { getStudentByCivilId, getRequestsByStudentId, getStudentAttendanceHistory, getBehaviorRecords, getStudentObservations } from '../services/storage';
+import { Student, ExcuseRequest, RequestStatus, AttendanceStatus, BehaviorRecord, StudentObservation } from '../types';
 
 const Inquiry: React.FC = () => {
   const navigate = useNavigate();
   
   // Search State
   const [searchId, setSearchId] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'requests' | 'behavior'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'requests' | 'behavior' | 'observations'>('overview');
   
   const [student, setStudent] = useState<Student | null>(null);
   const [history, setHistory] = useState<ExcuseRequest[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<{ date: string, status: AttendanceStatus }[]>([]);
   const [behaviorHistory, setBehaviorHistory] = useState<BehaviorRecord[]>([]);
+  const [observations, setObservations] = useState<StudentObservation[]>([]);
   
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,16 +26,18 @@ const Inquiry: React.FC = () => {
     setLoading(true);
     try {
         setStudent(targetStudent);
-        // 2. Get Requests, Attendance, and Behavior in parallel
-        const [studentRequests, attHist, behHist] = await Promise.all([
+        // 2. Get Requests, Attendance, Behavior, and Observations in parallel
+        const [studentRequests, attHist, behHist, obsHist] = await Promise.all([
             getRequestsByStudentId(targetStudent.studentId),
             getStudentAttendanceHistory(targetStudent.studentId, targetStudent.grade, targetStudent.className),
-            getBehaviorRecords(targetStudent.studentId)
+            getBehaviorRecords(targetStudent.studentId),
+            getStudentObservations(targetStudent.studentId)
         ]);
         
         setHistory(studentRequests);
         setAttendanceHistory(attHist);
         setBehaviorHistory(behHist);
+        setObservations(obsHist);
         setActiveTab('overview');
     } catch (e) {
         console.error(e);
@@ -50,6 +53,7 @@ const Inquiry: React.FC = () => {
     setHistory([]);
     setAttendanceHistory([]);
     setBehaviorHistory([]);
+    setObservations([]);
     setSearched(false);
 
     if (!searchId) return;
@@ -137,6 +141,15 @@ const Inquiry: React.FC = () => {
       present: attendanceHistory.filter(r => r.status === AttendanceStatus.PRESENT).length,
       excuses: history.length,
       violations: behaviorHistory.length
+  };
+
+  const getObsColor = (type: string) => {
+    switch (type) {
+      case 'academic': return 'border-l-4 border-blue-500 bg-blue-50';
+      case 'behavioral': return 'border-l-4 border-amber-500 bg-amber-50';
+      case 'positive': return 'border-l-4 border-emerald-500 bg-emerald-50';
+      default: return 'border-l-4 border-slate-300 bg-slate-50';
+    }
   };
 
   return (
@@ -273,6 +286,16 @@ const Inquiry: React.FC = () => {
                         )}
                         {activeTab === 'behavior' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
                     </button>
+                    <button 
+                        onClick={() => setActiveTab('observations')}
+                        className={`pb-3 text-sm font-bold transition-all whitespace-nowrap relative ${activeTab === 'observations' ? 'text-pink-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                        الملاحظات
+                        {observations.length > 0 && (
+                            <span className="bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded text-[10px] mr-2 font-bold">{observations.length}</span>
+                        )}
+                        {activeTab === 'observations' && <div className="absolute bottom-0 left-0 w-full h-1 bg-pink-600 rounded-t-full"></div>}
+                    </button>
                 </div>
 
                 {/* Tab Content */}
@@ -320,7 +343,7 @@ const Inquiry: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Behavior Stats (NEW) */}
+                                {/* Behavior Stats */}
                                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
                                     <div className="flex items-start justify-between mb-4">
                                         <div>
@@ -356,6 +379,50 @@ const Inquiry: React.FC = () => {
                                         <div className="mt-4 pt-4 border-t border-slate-50 text-center">
                                             <p className="text-sm font-bold text-emerald-600 flex items-center justify-center gap-2">
                                                 <Check size={16} /> سجل سلوكي ممتاز
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Observations Stats - NEW */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-slate-800">ملاحظات المعلمين</h3>
+                                            <p className="text-xs text-slate-400">المتابعة الأكاديمية والسلوكية</p>
+                                        </div>
+                                        <div className={`p-2 rounded-xl ${observations.length > 0 ? 'bg-pink-50 text-pink-600' : 'bg-slate-50 text-slate-400'}`}>
+                                            <MessageSquare size={20} />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-2 h-2 rounded-full ${observations.length > 0 ? 'bg-pink-500' : 'bg-slate-300'}`}></div>
+                                            <span className="text-sm font-bold text-slate-700">عدد الملاحظات</span>
+                                        </div>
+                                        <span className={`text-lg font-bold ${observations.length > 0 ? 'text-pink-600' : 'text-slate-500'}`}>
+                                            {observations.length}
+                                        </span>
+                                    </div>
+
+                                    {observations.length > 0 ? (
+                                        <div className="mt-4 pt-4 border-t border-slate-50">
+                                            <p className="text-xs font-bold text-slate-500 mb-2">آخر ملاحظة:</p>
+                                            <div className={`rounded-xl p-3 border ${getObsColor(observations[0].type)}`}>
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="text-xs font-bold text-slate-800">{observations[0].staffName}</span>
+                                                    <span className="text-[10px] text-slate-500 bg-white/50 px-2 py-0.5 rounded-full">{observations[0].date}</span>
+                                                </div>
+                                                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                                                    {observations[0].content}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-4 pt-4 border-t border-slate-50 text-center">
+                                            <p className="text-sm font-bold text-slate-400 flex items-center justify-center gap-2">
+                                                <Check size={16} /> لا توجد ملاحظات مسجلة
                                             </p>
                                         </div>
                                     )}
@@ -504,6 +571,39 @@ const Inquiry: React.FC = () => {
                                             <div className="text-xs text-slate-600 bg-white p-3 rounded-lg border border-red-100 mt-2">
                                                 <strong>الإجراء المتخذ:</strong> {rec.actionTaken}
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 5. OBSERVATIONS TAB */}
+                    {activeTab === 'observations' && (
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
+                            <div className="p-6 border-b border-slate-50 flex items-center gap-2">
+                                <MessageSquare className="text-pink-500" size={20} />
+                                <h3 className="font-bold text-slate-800">ملاحظات المعلمين</h3>
+                            </div>
+
+                            {observations.length === 0 ? (
+                                <div className="py-20 text-center text-slate-400 bg-slate-50/30 m-4 rounded-2xl border border-slate-100 border-dashed">
+                                    <FileText className="mx-auto mb-2 opacity-50" size={48} />
+                                    <p className="font-bold">لا توجد ملاحظات مسجلة</p>
+                                </div>
+                            ) : (
+                                <div className="p-4 space-y-4">
+                                    {observations.map(obs => (
+                                        <div key={obs.id} className={`border rounded-xl p-4 relative overflow-hidden ${getObsColor(obs.type)}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800 text-sm">ملاحظة من: {obs.staffName}</h4>
+                                                    <p className="text-xs text-slate-500">{obs.date}</p>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-slate-700 leading-relaxed">
+                                                {obs.content}
+                                            </p>
                                         </div>
                                     ))}
                                 </div>

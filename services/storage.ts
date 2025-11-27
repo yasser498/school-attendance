@@ -732,6 +732,12 @@ export const getBehaviorRecords = async (studentId?: string) => {
   return data.map(mapBehaviorFromDB);
 };
 
+// New function to clear all behavior records
+export const clearBehaviorRecords = async () => {
+  const { error } = await supabase.from('behavior_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (error) throw new Error(error.message);
+};
+
 export const sendAdminInsight = async (role: 'deputy' | 'counselor', content: string) => {
   const { error } = await supabase.from('admin_insights').insert({
     target_role: role,
@@ -749,6 +755,12 @@ export const getAdminInsights = async (role: 'deputy' | 'counselor') => {
     
   if (error) throw new Error(error.message);
   return data.map(mapInsightFromDB);
+};
+
+// New function to clear insights
+export const clearAdminInsights = async () => {
+  const { error } = await supabase.from('admin_insights').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (error) throw new Error(error.message);
 };
 
 // --- REFERRALS (ADMIN -> COUNSELOR) ---
@@ -775,6 +787,12 @@ export const updateReferralStatus = async (id: string, status: 'pending' | 'in_p
     .from('referrals')
     .update({ status })
     .eq('id', id);
+  if (error) throw new Error(error.message);
+};
+
+// New function to clear referrals
+export const clearReferrals = async () => {
+  const { error } = await supabase.from('referrals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (error) throw new Error(error.message);
 };
 

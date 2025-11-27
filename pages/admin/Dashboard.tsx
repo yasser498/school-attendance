@@ -2,9 +2,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Search, Settings, Printer, BarChart2, ListFilter, Users, Settings2, Trash2, Wifi, BellRing, Phone, ShieldAlert, Send, Megaphone, Activity, UserMinus, BookOpen, MessageSquare, ArrowRight, LayoutGrid, Save, School, FileSpreadsheet, X } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, Search, Settings, Printer, BarChart2, ListFilter, Users, Settings2, Trash2, Wifi, BellRing, Phone, ShieldAlert, Send, Megaphone, Activity, UserMinus, BookOpen, MessageSquare, ArrowRight, LayoutGrid, Save, School, FileSpreadsheet, X, Database, RefreshCw } from 'lucide-react';
 import StatCard from '../../components/StatCard';
-import { getRequests, getStudents, getConsecutiveAbsences, resolveAbsenceAlert, getBehaviorRecords, sendAdminInsight, testSupabaseConnection, getAttendanceRecords, getPendingRequestsCountForStaff, generateSmartContent } from '../../services/storage';
+import { getRequests, getStudents, getConsecutiveAbsences, resolveAbsenceAlert, getBehaviorRecords, sendAdminInsight, testSupabaseConnection, getAttendanceRecords, getPendingRequestsCountForStaff, generateSmartContent, clearAttendance, clearRequests, clearStudents, clearBehaviorRecords, clearAdminInsights, clearReferrals } from '../../services/storage';
 import { RequestStatus, ExcuseRequest, Student, BehaviorRecord, AttendanceRecord, AttendanceStatus } from '../../types';
 
 const Dashboard: React.FC = () => {
@@ -43,6 +43,10 @@ const Dashboard: React.FC = () => {
   // API Key
   const [apiKey, setApiKey] = useState(localStorage.getItem('ozr_ai_config') ? JSON.parse(localStorage.getItem('ozr_ai_config')!).apiKey : '');
   const [testingConnection, setTestingConnection] = useState(false);
+
+  // DELETION & RESET STATE
+  const [deleteTarget, setDeleteTarget] = useState<'requests' | 'attendance' | 'students' | 'all' | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,6 +131,41 @@ const Dashboard: React.FC = () => {
       finally { setIsGenerating(false); }
   };
 
+  // --- Deletion Logic ---
+  const executeDelete = async () => {
+      if (!deleteTarget) return;
+      setIsDeleting(true);
+      try {
+          if (deleteTarget === 'requests') {
+              await clearRequests();
+              alert("تم حذف جميع طلبات الأعذار.");
+          } else if (deleteTarget === 'attendance') {
+              await clearAttendance();
+              alert("تم حذف سجلات الحضور والغياب.");
+          } else if (deleteTarget === 'students') {
+              await clearStudents();
+              alert("تم حذف جميع بيانات الطلاب.");
+          } else if (deleteTarget === 'all') {
+              // Full Reset
+              await Promise.all([
+                  clearStudents(),
+                  clearRequests(),
+                  clearAttendance(),
+                  clearBehaviorRecords(),
+                  clearAdminInsights(),
+                  clearReferrals()
+              ]);
+              alert("تمت تهيئة النظام للعام الجديد بنجاح. تم حذف جميع البيانات.");
+          }
+          window.location.reload(); // Reload to reflect changes
+      } catch (e: any) {
+          alert("حدث خطأ أثناء الحذف: " + e.message);
+      } finally {
+          setIsDeleting(false);
+          setDeleteTarget(null);
+      }
+  };
+
   // --- Stats Calculation ---
   const stats = useMemo(() => {
     const total = requests.length;
@@ -154,7 +193,7 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in pb-20">
+    <div className="space-y-6 animate-fade-in pb-20 relative">
       
       {/* VIEW 0: MENU (Command Center) */}
       {activeView === 'menu' && (
@@ -384,6 +423,7 @@ const Dashboard: React.FC = () => {
                       <button onClick={saveSchoolSettings} className="w-full bg-blue-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Save size={18}/> حفظ الهوية</button>
                   </div>
               </div>
+              
               {/* AI Config */}
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm max-w-2xl mx-auto">
                   <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Settings2/> الإعدادات التقنية</h2>
@@ -396,6 +436,67 @@ const Dashboard: React.FC = () => {
                           <div><h3 className="font-bold text-emerald-800">حالة الاتصال</h3><p className="text-sm text-emerald-600">فحص الاتصال بقاعدة البيانات السحابية</p></div>
                           <button onClick={runConnectionTest} disabled={testingConnection} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">{testingConnection ? <Loader2 className="animate-spin" size={16}/> : <Wifi size={16}/>} فحص الآن</button>
                       </div>
+                  </div>
+              </div>
+
+              {/* NEW: Data & Deletion Management */}
+              <div className="bg-white p-6 rounded-3xl border-2 border-red-50 shadow-sm max-w-2xl mx-auto">
+                  <h2 className="text-xl font-bold text-red-800 mb-6 flex items-center gap-2"><Database className="text-red-600"/> إعدادات حذف البيانات والتهيئة</h2>
+                  
+                  <div className="space-y-4">
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-2 gap-4">
+                          <button onClick={() => setDeleteTarget('requests')} className="flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 py-3 rounded-xl font-bold text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
+                              <Trash2 size={16} /> حذف طلبات الأعذار
+                          </button>
+                          <button onClick={() => setDeleteTarget('attendance')} className="flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 py-3 rounded-xl font-bold text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
+                              <Trash2 size={16} /> حذف بيانات الحضور
+                          </button>
+                          <button onClick={() => setDeleteTarget('students')} className="col-span-2 flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 py-3 rounded-xl font-bold text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
+                              <Trash2 size={16} /> حذف جميع الطلاب
+                          </button>
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-4">
+                          <button onClick={() => setDeleteTarget('all')} className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20">
+                              <RefreshCw size={20} /> تهيئة للعام الدراسي الجديد (حذف شامل)
+                          </button>
+                          <p className="text-center text-xs text-slate-400 mt-2">تحذير: هذا الإجراء سيقوم بحذف جميع البيانات (طلاب، حضور، أعذار، سلوك) ولا يمكن التراجع عنه.</p>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-100 text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertTriangle size={32} className="text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">هل أنت متأكد؟</h3>
+                  <p className="text-slate-500 text-sm mb-6">
+                      {deleteTarget === 'all' 
+                        ? "أنت على وشك حذف جميع بيانات النظام وتهيئته لعام جديد. هذا الإجراء نهائي ولا يمكن التراجع عنه." 
+                        : deleteTarget === 'requests' ? "سيتم حذف جميع طلبات الأعذار المسجلة."
+                        : deleteTarget === 'attendance' ? "سيتم حذف جميع سجلات الحضور والغياب."
+                        : "سيتم حذف جميع بيانات الطلاب من النظام."}
+                  </p>
+                  
+                  <div className="flex gap-3">
+                      <button 
+                        onClick={() => setDeleteTarget(null)} 
+                        className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                      >
+                          إلغاء
+                      </button>
+                      <button 
+                        onClick={executeDelete}
+                        disabled={isDeleting}
+                        className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                          {isDeleting ? <Loader2 className="animate-spin" /> : 'نعم، احذف'}
+                      </button>
                   </div>
               </div>
           </div>

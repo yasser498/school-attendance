@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Briefcase, AlertTriangle, Plus, Search, Loader2, X, Send, Sparkles, 
-  User, FileWarning, Check, BarChart2, Printer, TrendingUp, Filter, 
-  Trash2, Edit, ArrowRight, LayoutGrid, FileText, School, Inbox, ChevronLeft,
-  Calendar, AlertCircle, PieChart as PieIcon, List, Activity, ShieldAlert, Gavel
+  Briefcase, AlertTriangle, Plus, Search, Sparkles, 
+  User, FileWarning, BarChart2, Printer, 
+  Trash2, Edit, LayoutGrid, School, Inbox,
+  Calendar, Activity
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area, Legend
@@ -33,7 +33,7 @@ const StaffDeputy: React.FC = () => {
   const [adminInsights, setAdminInsights] = useState<AdminInsight[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // AI Analysis (محجوزة للتوسع لاحقاً)
+  // Placeholder AI state (للتوسع لاحقاً)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -50,12 +50,15 @@ const StaffDeputy: React.FC = () => {
   const [notes, setNotes] = useState('');
   
   // Printing State
-  const [printMode, setPrintMode] = useState<'none' | 'commitment' | 'daily' | 'summons'>('none');
+  const [printMode, setPrintMode] = useState<'none' | 'commitment' | 'daily' | 'summons' | 'monthly'>('none');
   const [recordToPrint, setRecordToPrint] = useState<BehaviorRecord | null>(null);
 
   // Search & Date State
   const [search, setSearch] = useState('');
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Monthly report state
+  const [monthlyMonth, setMonthlyMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
   useEffect(() => {
     const session = localStorage.getItem('ozr_staff_session');
@@ -122,7 +125,6 @@ const StaffDeputy: React.FC = () => {
     setFormGrade(rec.grade);
     setFormClass(rec.className);
     
-    // Find the internal student ID based on the Civil ID stored in the record
     const studentObj = students.find(s => s.studentId === rec.studentId);
     if (studentObj) {
       setSelectedStudentId(studentObj.id);
@@ -146,7 +148,8 @@ const StaffDeputy: React.FC = () => {
 
     const violationObj = BEHAVIOR_VIOLATIONS.find(v => v.degree === selectedDegree);
     const article = violationObj?.article || '';
-    const todayISO = new Date().toISOString();
+    const now = new Date();
+    const todayISO = now.toISOString();
 
     const recordData: BehaviorRecord = {
       id: editingId || '',
@@ -245,6 +248,14 @@ const StaffDeputy: React.FC = () => {
     }, 200);
   };
 
+  const handlePrintMonthly = () => {
+    setPrintMode('monthly');
+    setTimeout(() => {
+      window.print();
+      setPrintMode('none');
+    }, 200);
+  };
+
   const handleDelete = async (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا السجل؟')) {
       await deleteBehaviorRecord(id);
@@ -259,6 +270,7 @@ const StaffDeputy: React.FC = () => {
     const classMap: Record<string, { grade: string, className: string, count: number }> = {};
     const typeMap: Record<string, number> = {};
     const degreeMap: Record<string, number> = {};
+    let severeCount = 0;
 
     records.forEach(r => {
       if (!studentCounts[r.studentId]) {
@@ -282,6 +294,10 @@ const StaffDeputy: React.FC = () => {
 
       typeMap[r.violationName] = (typeMap[r.violationName] || 0) + 1;
       degreeMap[r.violationDegree] = (degreeMap[r.violationDegree] || 0) + 1;
+
+      if (r.violationDegree.includes('الرابعة') || r.violationDegree.includes('الخامسة')) {
+        severeCount++;
+      }
     });
 
     const topOffenders = Object.values(studentCounts).sort((a, b) => b.score - a.score).slice(0, 5);
@@ -300,42 +316,74 @@ const StaffDeputy: React.FC = () => {
       count: records.filter(r => r.date === date).length
     }));
 
-    return { total, topOffenders, classStats, trendData, degreeData, typeData };
+    const uniqueStudentsWithViolations = Object.keys(studentCounts).length;
+    const avgPerStudent = uniqueStudentsWithViolations
+      ? (total / uniqueStudentsWithViolations)
+      : 0;
+
+    const severeRatio = total ? (severeCount / total) * 100 : 0;
+
+    return { 
+      total, 
+      topOffenders, 
+      classStats, 
+      trendData, 
+      degreeData, 
+      typeData,
+      uniqueStudentsWithViolations,
+      avgPerStudent,
+      severeCount,
+      severeRatio
+    };
   }, [records]);
 
   const filteredRecords = records.filter(r => 
     r.studentName.includes(search) || r.violationName.includes(search)
   );
   const dailyRecords = records.filter(r => r.date === reportDate);
+
+  const monthlyRecords = useMemo(
+    () => records.filter(r => r.date.startsWith(monthlyMonth)),
+    [records, monthlyMonth]
+  );
+
   const DEGREE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'];
 
   // REUSABLE HEADER COMPONENT FOR PRINTING
   const OfficialHeader = () => (
-    <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-8">
-      {/* Right: School Info */}
-      <div className="text-center font-bold space-y-1 w-1/3 pt-2">
-        <p className="text-lg">{SCHOOL_NAME}</p>
-        <p className="text-sm">إدارة شؤون الطلاب</p>
-        <p className="text-sm">وحدة التوجيه والإرشاد</p>
+    <div className="mb-6">
+      <div className="flex items-center justify-between">
+        {/* أعلى يسار: المملكة / الوزارة */}
+        <div className="text-left font-bold text-sm space-y-1">
+          <p>المملكة العربية السعودية</p>
+          <p>وزارة التعليم</p>
+        </div>
+        {/* المنتصف: الشعار */}
+        <div className="flex-1 flex justify-center">
+          <img
+            src="https://www.raed.net/img?id=1473202"
+            alt="شعار وزارة التعليم"
+            className="h-20 w-auto object-contain"
+          />
+        </div>
       </div>
-
-      {/* Center: Logo */}
-      <div className="w-1/3 flex justify-center">
-        <img
-          src="https://www.raed.net/img?id=1473202"
-          alt="Logo"
-          className="h-24 w-auto object-contain"
-        />
-      </div>
-
-      {/* Left: Ministry Info */}
-      <div className="text-center font-bold space-y-1 w-1/3 pt-2">
-        <p>المملكة العربية السعودية</p>
-        <p>وزارة التعليم</p>
-        <p>Ministry of Education</p>
+      {/* خط فاصل أسفل الكليشة */}
+      <hr className="border-t-2 border-black mt-4" />
+      {/* اسم المدرسة في المنتصف بشكل رسمي */}
+      <div className="mt-2 text-center text-sm font-bold">
+        {SCHOOL_NAME}
       </div>
     </div>
   );
+
+  const formatMonthLabel = (ym: string) => {
+    try {
+      const d = new Date(ym + '-01');
+      return d.toLocaleDateString('ar-SA', { month: 'long', year: 'numeric' });
+    } catch {
+      return ym;
+    }
+  };
 
   return (
     <>
@@ -600,6 +648,179 @@ const StaffDeputy: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Monthly Report Template */}
+        {printMode === 'monthly' && (
+          <div className="print-border p-6 text-right space-y-6" dir="rtl">
+            <OfficialHeader />
+
+            <h1 className="text-2xl font-bold text-center mb-2">
+              التقرير الشهري للمخالفات السلوكية
+            </h1>
+            <p className="text-center text-lg mb-4">
+              الفترة: <strong>{formatMonthLabel(monthlyMonth)}</strong>
+            </p>
+
+            {/* ملخص رقمي للشهر */}
+            {(() => {
+              const totalMonthly = monthlyRecords.length;
+              let severeMonthly = 0;
+              const classMap: Record<string, { grade: string; className: string; total: number; severe: number }> = {};
+              const studentMap: Record<string, { name: string; grade: string; count: number }> = {};
+
+              monthlyRecords.forEach(r => {
+                const isSevere = r.violationDegree.includes('الرابعة') || r.violationDegree.includes('الخامسة');
+                if (isSevere) severeMonthly++;
+
+                const key = `${r.grade}-${r.className}`;
+                if (!classMap[key]) {
+                  classMap[key] = { grade: r.grade, className: r.className, total: 0, severe: 0 };
+                }
+                classMap[key].total++;
+                if (isSevere) classMap[key].severe++;
+
+                if (!studentMap[r.studentId]) {
+                  studentMap[r.studentId] = {
+                    name: r.studentName,
+                    grade: `${r.grade} - ${r.className}`,
+                    count: 0
+                  };
+                }
+                studentMap[r.studentId].count++;
+              });
+
+              const classRows = Object.values(classMap).sort((a, b) => b.total - a.total);
+              const topStudents = Object.values(studentMap).sort((a, b) => b.count - a.count).slice(0, 10);
+              const severeRatioMonthly = totalMonthly ? ((severeMonthly / totalMonthly) * 100).toFixed(1) : '0.0';
+
+              return (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
+                    <div className="border border-slate-300 rounded-lg p-3">
+                      <p className="font-bold text-slate-700 mb-1">
+                        إجمالي المخالفات في الشهر
+                      </p>
+                      <p className="text-2xl font-extrabold text-slate-900">
+                        {totalMonthly}
+                      </p>
+                    </div>
+                    <div className="border border-slate-300 rounded-lg p-3">
+                      <p className="font-bold text-slate-700 mb-1">
+                        عدد المخالفات الشديدة (درجة رابعة وخامسة)
+                      </p>
+                      <p className="text-2xl font-extrabold text-red-700">
+                        {severeMonthly}
+                        <span className="text-sm text-slate-600 ml-2">
+                          ({severeRatioMonthly}% من إجمالي الشهر)
+                        </span>
+                      </p>
+                    </div>
+                    <div className="border border-slate-300 rounded-lg p-3">
+                      <p className="font-bold text-slate-700 mb-1">
+                        عدد الفصول التي يوجد بها مخالفات
+                      </p>
+                      <p className="text-2xl font-extrabold text-emerald-700">
+                        {classRows.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* جدول الفصول */}
+                  <h2 className="text-lg font-bold mt-4 mb-2">
+                    أولاً: توزيع المخالفات على مستوى الفصول
+                  </h2>
+                  <table className="w-full text-right text-sm mb-4">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="p-2">م</th>
+                        <th className="p-2">الصف / الفصل</th>
+                        <th className="p-2">عدد المخالفات</th>
+                        <th className="p-2">المخالفات الشديدة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-3 text-center text-slate-500">
+                            لا يوجد سجلات مخالفة خلال هذا الشهر.
+                          </td>
+                        </tr>
+                      ) : (
+                        classRows.map((c, idx) => (
+                          <tr key={idx} className="avoid-break">
+                            <td className="p-2 text-slate-600">{idx + 1}</td>
+                            <td className="p-2 font-bold">
+                              {c.grade} - {c.className}
+                            </td>
+                            <td className="p-2">{c.total}</td>
+                            <td className="p-2">
+                              {c.severe}
+                              {c.severe > 0 && (
+                                <span className="text-xs text-red-700 mr-2">
+                                  ({((c.severe / c.total) * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* جدول أعلى الطلاب */}
+                  <h2 className="text-lg font-bold mt-6 mb-2">
+                    ثانياً: أعلى ١٠ طلاب من حيث تكرار المخالفات خلال الشهر
+                  </h2>
+                  <table className="w-full text-right text-sm">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="p-2">م</th>
+                        <th className="p-2">الطالب</th>
+                        <th className="p-2">الصف / الفصل</th>
+                        <th className="p-2">عدد المخالفات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topStudents.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-3 text-center text-slate-500">
+                            لا يوجد طلاب مكررين خلال هذا الشهر.
+                          </td>
+                        </tr>
+                      ) : (
+                        topStudents.map((st, idx) => (
+                          <tr key={idx} className="avoid-break">
+                            <td className="p-2 text-slate-600">{idx + 1}</td>
+                            <td className="p-2 font-bold">{st.name}</td>
+                            <td className="p-2">{st.grade}</td>
+                            <td className="p-2">{st.count}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </>
+              );
+            })()}
+
+            <div className="flex justify-between mt-10 px-8 text-sm">
+              <div className="text-center">
+                <p className="font-bold mb-2">وكيل شؤون الطلاب</p>
+                <p className="mb-6">{currentUser?.name || '........................'}</p>
+                <p>التوقيع: .............................</p>
+              </div>
+              <div className="text-center">
+                <p className="font-bold mb-2">قائد المدرسة</p>
+                <p className="mb-6">.................................</p>
+                <p>التوقيع: .............................</p>
+              </div>
+            </div>
+
+            <div className="mt-8 text-center text-xs text-slate-500 border-t pt-3">
+              التقرير الشهري للمخالفات السلوكية - {SCHOOL_NAME}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --- التطبيق الرئيسي (لا يُطبع) --- */}
@@ -744,7 +965,6 @@ const StaffDeputy: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="p-8 space-y-8">
               {isEditing ? (
-                // READ-ONLY STUDENT CARD FOR EDITING
                 <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex items-center gap-4 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
                   <div className="bg-white p-3 rounded-full text-blue-600 shadow-sm border border-blue-100">
@@ -763,7 +983,6 @@ const StaffDeputy: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                // INTERACTIVE DROPDOWNS FOR NEW RECORD
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
@@ -898,7 +1117,6 @@ const StaffDeputy: React.FC = () => {
                   </select>
                 </div>
                 
-                {/* PRINT BUTTONS AREA IN FORM */}
                 <div className="flex gap-2">
                   {showCommitmentPrint && selectedStudentId && (
                     <button
@@ -1039,7 +1257,6 @@ const StaffDeputy: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Card Actions */}
                     <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-50">
                       {hasCommitment && (
                         <button
@@ -1199,7 +1416,7 @@ const StaffDeputy: React.FC = () => {
           </div>
         )}
 
-        {/* Analytics View (مختصر) */}
+        {/* Analytics View – مطورة + تقرير شهري */}
         {activeView === 'analytics' && (
           <div className="space-y-8 animate-fade-in">
             <div className="flex items-center gap-3 mb-2">
@@ -1211,31 +1428,258 @@ const StaffDeputy: React.FC = () => {
                   لوحة التحليل السلوكي
                 </h2>
                 <p className="text-slate-500 text-sm">
-                  نظرة سريعة على مؤشرات الانضباط في المدرسة.
+                  مؤشرات عملية لمتابعة الانضباط على مستوى المدرسة والفصول والطلاب.
                 </p>
               </div>
             </div>
 
+            {/* اختيار شهر + زر طباعة تقرير شهري */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-bold text-slate-700">
+                  شهر التقرير:
+                </label>
+                <input
+                  type="month"
+                  value={monthlyMonth}
+                  onChange={e => setMonthlyMonth(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold"
+                />
+                <span className="text-xs text-slate-500">
+                  عدد مخالفات الشهر المختار:{" "}
+                  <span className="font-bold text-red-600">
+                    {monthlyRecords.length}
+                  </span>
+                </span>
+              </div>
+              <button
+                onClick={handlePrintMonthly}
+                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 shadow-md"
+              >
+                <Printer size={16}/>
+                طباعة التقرير الشهري
+              </button>
+            </div>
+
+            {/* مؤشرات عليا */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
                 <p className="text-slate-500 text-xs font-bold uppercase">
                   إجمالي المخالفات
                 </p>
-                <p className="text-4xl font-extrabold text-slate-800">
+                <p className="text-3xl font-extrabold text-slate-800 mt-1">
                   {analyticsData.total}
                 </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  مجموع جميع المخالفات المسجلة خلال الفترة الحالية.
+                </p>
               </div>
+
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
                 <p className="text-slate-500 text-xs font-bold uppercase">
-                  الطلاب المكررين
+                  الطلاب المكررين (Top 5)
                 </p>
-                <p className="text-4xl font-extrabold text-purple-600">
+                <p className="text-3xl font-extrabold text-purple-600 mt-1">
                   {analyticsData.topOffenders.length}
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  قائمة مركزة للمتابعة الإرشادية الفردية.
+                </p>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-slate-500 text-xs font-bold uppercase">
+                  الفصول التي لديها مخالفات
+                </p>
+                <p className="text-3xl font-extrabold text-emerald-600 mt-1">
+                  {analyticsData.classStats.length}
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  عدد الفصول التي تم رصد مخالفة واحدة على الأقل بها.
+                </p>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-slate-500 text-xs font-bold uppercase">
+                  المخالفات الشديدة
+                </p>
+                <p className="text-3xl font-extrabold text-red-700 mt-1">
+                  {analyticsData.severeCount}
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  نسبة الشديدة:{" "}
+                  {analyticsData.severeRatio.toFixed(1)}%
                 </p>
               </div>
             </div>
 
-            {/* يمكن هنا لاحقاً إضافة الرسوم البيانية (BarChart / PieChart) كما هو في نسختك السابقة */}
+            {/* اتجاه ٧ أيام + توزيع الدرجات */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">
+                    اتجاه المخالفات خلال آخر ٧ أيام
+                  </h3>
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={analyticsData.trendData}>
+                      <defs>
+                        <linearGradient id="trendColor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#f97316"
+                        fillOpacity={1}
+                        fill="url(#trendColor)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">
+                    توزيع المخالفات حسب درجة المخالفة
+                  </h3>
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analyticsData.degreeData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="value">
+                        {analyticsData.degreeData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={DEGREE_COLORS[index % DEGREE_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* الفصول الأعلى + أكثر أنواع المخالفات */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">
+                    أعلى الفصول من حيث عدد المخالفات
+                  </h3>
+                  {analyticsData.classStats[0] && (
+                    <span className="text-xs text-slate-500">
+                      الأعلى: {analyticsData.classStats[0].grade} - {analyticsData.classStats[0].className}
+                    </span>
+                  )}
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analyticsData.classStats.slice(0, 5)}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="className" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#3b82f6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">
+                    أكثر أنواع المخالفات تكراراً
+                  </h3>
+                  {analyticsData.typeData[0] && (
+                    <span className="text-xs text-slate-500">
+                      الأعلى: {analyticsData.typeData[0].name}
+                    </span>
+                  )}
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analyticsData.typeData}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={80}
+                        label
+                      >
+                        {analyticsData.typeData.map((entry, index) => (
+                          <Cell key={`cell-type-${index}`} fill={DEGREE_COLORS[index % DEGREE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Top 5 طلاب مكررين */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-bold text-slate-800">
+                  قائمة المتابعة: أعلى ٥ طلاب من حيث تكرار المخالفات
+                </h3>
+                <span className="text-xs text-slate-400">
+                  أداة عملية لتوجيه برامج الإرشاد الفردي.
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-sm">
+                  <thead className="border-b border-slate-100 bg-slate-50">
+                    <tr>
+                      <th className="py-2 px-3">#</th>
+                      <th className="py-2 px-3">الطالب</th>
+                      <th className="py-2 px-3">الصف / الفصل</th>
+                      <th className="py-2 px-3">عدد المخالفات</th>
+                      <th className="py-2 px-3">مؤشر الخطورة (تقديري)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyticsData.topOffenders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-4 text-center text-slate-400">
+                          لا يوجد بيانات كافية لعرض الطلاب المكررين.
+                        </td>
+                      </tr>
+                    ) : (
+                      analyticsData.topOffenders.map((st, idx) => (
+                        <tr key={st.id} className="border-b border-slate-50">
+                          <td className="py-2 px-3 text-slate-500">{idx + 1}</td>
+                          <td className="py-2 px-3 font-bold text-slate-800">{st.name}</td>
+                          <td className="py-2 px-3 text-slate-600">{st.grade}</td>
+                          <td className="py-2 px-3 text-slate-800">{st.count}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold
+                              ${st.score >= 20 ? 'bg-red-100 text-red-700' 
+                              : st.score >= 10 ? 'bg-amber-100 text-amber-700' 
+                              : 'bg-emerald-100 text-emerald-700'}`}
+                            >
+                              {st.score}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>

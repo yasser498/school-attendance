@@ -281,42 +281,89 @@ const Inquiry: React.FC = () => {
                     {/* 1. OVERVIEW TAB */}
                     {activeTab === 'overview' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-slate-800">حالة الانضباط</h3>
-                                        <p className="text-xs text-slate-400">ملخص العام الدراسي الحالي</p>
+                            
+                            {/* Left Column: Stats & Behavior */}
+                            <div className="space-y-6">
+                                {/* Attendance Stats */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-slate-800">حالة الانضباط</h3>
+                                            <p className="text-xs text-slate-400">ملخص العام الدراسي الحالي</p>
+                                        </div>
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                                            <PieChart size={20} />
+                                        </div>
                                     </div>
-                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                        <PieChart size={20} />
+                                    <div className="space-y-4">
+                                        <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                <span className="text-sm font-bold text-slate-700">أيام الغياب</span>
+                                            </div>
+                                            <span className="text-lg font-bold text-slate-800">{stats.absent}</span>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                                <span className="text-sm font-bold text-slate-700">أيام التأخر</span>
+                                            </div>
+                                            <span className="text-lg font-bold text-slate-800">{stats.late}</span>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                <span className="text-sm font-bold text-slate-700">أيام الحضور</span>
+                                            </div>
+                                            <span className="text-lg font-bold text-slate-800">{stats.present}</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="space-y-4">
+
+                                {/* Behavior Stats (NEW) */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-slate-800">السلوك والمواظبة</h3>
+                                            <p className="text-xs text-slate-400">المخالفات السلوكية المرصودة</p>
+                                        </div>
+                                        <div className={`p-2 rounded-xl ${stats.violations > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                            <FileWarning size={20} />
+                                        </div>
+                                    </div>
+                                    
                                     <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                            <span className="text-sm font-bold text-slate-700">أيام الغياب</span>
+                                            <div className={`w-2 h-2 rounded-full ${stats.violations > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                                            <span className="text-sm font-bold text-slate-700">عدد المخالفات</span>
                                         </div>
-                                        <span className="text-lg font-bold text-slate-800">{stats.absent}</span>
+                                        <span className={`text-lg font-bold ${stats.violations > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            {stats.violations}
+                                        </span>
                                     </div>
-                                    <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                                            <span className="text-sm font-bold text-slate-700">أيام التأخر</span>
+
+                                    {stats.violations > 0 ? (
+                                        <div className="mt-4 pt-4 border-t border-slate-50">
+                                            <p className="text-xs font-bold text-slate-500 mb-2">آخر مخالفة مسجلة:</p>
+                                            <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-xs font-bold text-red-800 line-clamp-1">{behaviorHistory[0]?.violationName}</span>
+                                                    <span className="text-[10px] text-red-600 bg-white px-2 py-0.5 rounded-full">{behaviorHistory[0]?.date}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <span className="text-lg font-bold text-slate-800">{stats.late}</span>
-                                    </div>
-                                    <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                            <span className="text-sm font-bold text-slate-700">أيام الحضور</span>
+                                    ) : (
+                                        <div className="mt-4 pt-4 border-t border-slate-50 text-center">
+                                            <p className="text-sm font-bold text-emerald-600 flex items-center justify-center gap-2">
+                                                <Check size={16} /> سجل سلوكي ممتاز
+                                            </p>
                                         </div>
-                                        <span className="text-lg font-bold text-slate-800">{stats.present}</span>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+                            {/* Right Column: Quick Actions */}
+                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-fit">
                                 <div className="flex items-start justify-between mb-6">
                                     <div>
                                         <h3 className="font-bold text-slate-800">إجراءات سريعة</h3>

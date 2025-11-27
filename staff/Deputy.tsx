@@ -23,6 +23,7 @@ import { BEHAVIOR_VIOLATIONS, GRADES } from '../../constants';
 
 const StaffDeputy: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
   
   // Navigation View State
   const [activeView, setActiveView] = useState<'menu' | 'add' | 'log' | 'daily' | 'analytics' | 'inbox'>('menu');
@@ -299,6 +300,30 @@ const StaffDeputy: React.FC = () => {
   const dailyRecords = records.filter(r => r.date === reportDate);
   const DEGREE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'];
 
+  // REUSABLE HEADER COMPONENT FOR PRINTING
+  const OfficialHeader = () => (
+      <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-8">
+          {/* Right: School Info */}
+          <div className="text-center font-bold space-y-1 w-1/3 pt-2">
+              <p className="text-lg">{SCHOOL_NAME}</p>
+              <p className="text-sm">إدارة شؤون الطلاب</p>
+              <p className="text-sm">وحدة التوجيه والإرشاد</p>
+          </div>
+
+          {/* Center: Logo */}
+          <div className="w-1/3 flex justify-center">
+              <img src="https://www.raed.net/img?id=1473202" alt="Logo" className="h-24 w-auto object-contain" />
+          </div>
+
+          {/* Left: Ministry Info */}
+          <div className="text-center font-bold space-y-1 w-1/3 pt-2">
+              <p>المملكة العربية السعودية</p>
+              <p>وزارة التعليم</p>
+              <p>Ministry of Education</p>
+          </div>
+      </div>
+  );
+
   return (
     <>
     {/* --- PRINT TEMPLATES --- */}
@@ -313,7 +338,8 @@ const StaffDeputy: React.FC = () => {
             .print-border {
                 border: 2px solid #000;
                 padding: 20px;
-                min-height: 95vh;
+                min-height: 98vh; /* Ensure full page border */
+                box-sizing: border-box;
             }
           }
         `}
@@ -324,29 +350,30 @@ const StaffDeputy: React.FC = () => {
         {/* Commitment Letter */}
         {printMode === 'commitment' && recordToPrint && (
             <div className="print-border p-8 text-right space-y-8" dir="rtl">
-                {/* Logo Resized Small */}
-                <img src="https://www.raed.net/img?id=1473156" alt="Header" className="w-24 h-auto object-contain mb-4 mx-auto" />
+                <OfficialHeader />
                 
                 <h1 className="text-3xl font-extrabold text-center mb-8 underline underline-offset-8">تعهد خطي (مخالفة سلوكية)</h1>
                 
-                <div className="text-xl leading-relaxed space-y-6">
+                <div className="text-right space-y-6 text-xl leading-relaxed font-medium">
                     <p>أقر أنا الطالب/ة: <strong>{recordToPrint.studentName}</strong></p>
                     <p>بالصف: <strong>{recordToPrint.grade} - {recordToPrint.className}</strong></p>
                     <p>بأنني قمت بالمخالفة التالية:</p>
-                    <p className="font-bold text-red-800 border-b-2 border-red-100 pb-2 inline-block">{recordToPrint.violationName}</p>
+                    <div className="bg-gray-100 p-4 border border-gray-300 rounded-lg">
+                        <p className="font-bold text-red-800">{recordToPrint.violationName}</p>
+                    </div>
                     
                     <p className="mt-8">وأتعهد بعدم تكرار هذا السلوك مستقبلاً، والالتزام بالأنظمة والتعليمات المدرسية. وفي حال التكرار، أتحمل كافة الإجراءات النظامية المترتبة على ذلك وفق لائحة السلوك والمواظبة.</p>
                 </div>
 
-                <div className="flex justify-between mt-24 px-12">
+                <div className="flex justify-between mt-24 px-12 text-lg">
                     <div className="text-center">
                         <p className="font-bold mb-4">الطالب/ة</p>
-                        <p>.............................</p>
+                        <p className="mt-8">.............................</p>
                     </div>
                     <div className="text-center">
                         <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p className="font-bold">{currentUser?.name}</p>
-                        <p>.............................</p>
+                        <p className="font-bold mb-8">{currentUser?.name}</p>
+                        <p>التوقيع: .............................</p>
                     </div>
                 </div>
                 
@@ -359,8 +386,7 @@ const StaffDeputy: React.FC = () => {
         {/* Parent Summons Letter */}
         {printMode === 'summons' && recordToPrint && (
             <div className="print-border p-8 text-right space-y-8" dir="rtl">
-                {/* Logo Resized Small */}
-                <img src="https://www.raed.net/img?id=1473202" alt="Header" className="w-24 h-auto object-contain mb-4 mx-auto" />
+                <OfficialHeader />
                 
                 <h2 className="text-2xl font-extrabold text-center underline mb-8">خطاب استدعاء ولي أمر</h2>
                 
@@ -382,24 +408,27 @@ const StaffDeputy: React.FC = () => {
                     <p>المكرم ولي أمر الطالب.. وفقه الله</p>
                     <p>السلام عليكم ورحمة الله وبركاته،،،</p>
                     <p>
-                        نظراً لارتكاب ابنكم مخالفة سلوكية: 
-                        <strong> ({recordToPrint.violationName}) </strong>
+                        نفيدكم بأنه تم رصد مخالفة سلوكية على ابنكم: 
+                        <br/>
+                        <strong>({recordToPrint.violationName})</strong>
                     </p>
                     <p>
-                       نأمل منكم الحضور للمدرسة يوم ..................... الموافق ...../...../.....هـ 
-                       وذلك لمناقشة وضع الطالب وتوقيع الإجراءات اللازمة لضمان عدم تكرار السلوك.
+                       لذا نأمل منكم التكرم بالحضور للمدرسة يوم ..................... الموافق ...../...../.....هـ 
+                       وذلك لمناقشة وضع الطالب وتوقيع الإجراءات اللازمة لضمان تعديل السلوك وعدم تكراره.
                     </p>
                     <p>شاكرين لكم حسن تعاونكم وحرصكم على مصلحة ابنكم.</p>
                 </div>
 
-                <div className="flex justify-between mt-24 px-12 text-xl">
+                <div className="flex justify-between mt-24 px-12 text-lg">
                     <div className="text-center">
                         <p className="font-bold mb-4">وكيل شؤون الطلاب</p>
-                        <p className="text-lg">{currentUser?.name}</p>
+                        <p className="text-lg font-bold mb-8">{currentUser?.name}</p>
+                        <p>التوقيع: .............................</p>
                     </div>
                     <div className="text-center">
                         <p className="font-bold mb-4">مدير المدرسة</p>
-                        <p className="text-lg">.............................</p>
+                        <p className="text-lg mb-8">.............................</p>
+                        <p>التوقيع: .............................</p>
                     </div>
                 </div>
                 
@@ -412,6 +441,7 @@ const StaffDeputy: React.FC = () => {
         {/* Daily Report Template */}
         {printMode === 'daily' && (
             <div className="p-4">
+                <OfficialHeader />
                 <h1 className="text-2xl font-bold text-center mb-6">تقرير المخالفات السلوكية اليومي</h1>
                 <p className="text-center mb-4">التاريخ: {reportDate}</p>
                 <table className="w-full text-right border-collapse border border-slate-800">

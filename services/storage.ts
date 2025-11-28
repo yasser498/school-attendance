@@ -1,6 +1,6 @@
 
 import { supabase } from '../supabaseClient';
-import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus, ClassAssignment, ResolvedAlert, BehaviorRecord, AdminInsight, Referral, StudentObservation } from "../types";
+import { Student, ExcuseRequest, RequestStatus, StaffUser, AttendanceRecord, AttendanceStatus, ClassAssignment, ResolvedAlert, BehaviorRecord, AdminInsight, Referral, StudentObservation, GuidanceSession } from "../types";
 import { GoogleGenAI } from "@google/genai";
 
 // --- Caching System ---
@@ -124,7 +124,6 @@ const mapBehaviorToDB = (b: BehaviorRecord) => ({
   action_taken: b.actionTaken, 
   notes: b.notes, 
   staff_id: b.staffId,
-  // Don't map parent fields for basic insert usually, but if needed for update:
   parent_viewed: b.parentViewed,
   parent_feedback: b.parentFeedback,
   parent_viewed_at: b.parentViewedAt
@@ -166,6 +165,27 @@ const mapObservationToDB = (o: StudentObservation) => ({
   parent_viewed_at: o.parentViewedAt
 });
 
+const mapSessionFromDB = (s: any): GuidanceSession => ({
+  id: s.id,
+  studentId: s.student_id,
+  date: s.date,
+  sessionType: s.session_type,
+  problemType: s.problem_type,
+  summary: s.summary,
+  recommendations: s.recommendations,
+  staffId: s.staff_id,
+  createdAt: s.created_at
+});
+const mapSessionToDB = (s: GuidanceSession) => ({
+  student_id: s.studentId,
+  date: s.date,
+  session_type: s.sessionType,
+  problem_type: s.problemType,
+  summary: s.summary,
+  recommendations: s.recommendations,
+  staff_id: s.staffId
+});
+
 // ... (Connection Test & Upload remain unchanged) ...
 export const testSupabaseConnection = async (): Promise<{ success: boolean; message: string }> => {
   try {
@@ -194,7 +214,7 @@ export const uploadFile = async (file: File): Promise<string | null> => {
   }
 };
 
-// ... (Standard CRUD functions remain mostly unchanged, listing only updated/new ones below) ...
+// ... (Standard CRUD functions) ...
 
 // Behavior Records
 export const addBehaviorRecord = async (record: BehaviorRecord) => {
@@ -259,8 +279,6 @@ export const clearStudentObservations = async () => {
   const { error } = await supabase.from('observations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (error) throw new Error(error.message);
 };
-
-// NEW: Acknowledge Observation (Parent)
 export const acknowledgeObservation = async (id: string, feedback?: string) => {
     const updateData = {
         parent_viewed: true,
@@ -271,8 +289,23 @@ export const acknowledgeObservation = async (id: string, feedback?: string) => {
     if (error) throw new Error(error.message);
 };
 
+// Guidance Sessions (NEW)
+export const addGuidanceSession = async (session: GuidanceSession) => {
+  const { error } = await supabase.from('guidance_sessions').insert(mapSessionToDB(session));
+  if (error) throw new Error(error.message);
+};
+export const getGuidanceSessions = async (studentId?: string) => {
+  let query = supabase.from('guidance_sessions').select('*').order('created_at', { ascending: false });
+  if (studentId) { query = query.eq('student_id', studentId); }
+  const { data, error } = await query;
+  if (error) {
+      if (error.code === '42P01') { console.warn("Guidance Sessions table not found."); return []; }
+      throw new Error(error.message);
+  }
+  return data.map(mapSessionFromDB);
+};
+
 // ... (Rest of existing functions: getStudents, getRequests, getAttendance etc.)
-// Assumed to be present as per previous files provided in context
 export const getStudents = async (forceRefresh = false): Promise<Student[]> => {
     if (!forceRefresh) { const cached = getFromCache<Student[]>('students'); if (cached) return cached; }
     const { data, error } = await supabase.from('students').select('*').order('name');

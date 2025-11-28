@@ -1,5 +1,5 @@
 {
-  "name": "تحويل-تطبيق-الغياب-الى-pwa",
+  "name": "تطوير-الغياب2",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -19,8 +19,7 @@
     "vite": "^7.2.4",
     "@vitejs/plugin-react": "^5.1.1",
     "react-window": "^1.8.10",
-    "firebase": "^12.6.0",
-    "vite-plugin-pwa": "^1.1.0"
+    "firebase": "^12.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

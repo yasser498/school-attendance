@@ -19,6 +19,7 @@ import StaffReports from './pages/staff/Reports'; // Staff Reports
 import StaffRequests from './pages/staff/Requests'; // Staff Requests
 import StaffStudents from './pages/staff/Students'; // Staff Students List (New)
 import StaffDeputy from './pages/staff/Deputy'; // Staff Deputy
+import StaffObservations from './pages/staff/Observations'; // Staff Observations
 import { StaffUser } from './types';
 
 // Protected Route for Admin
@@ -112,8 +113,9 @@ const AppContent = () => {
         <Route path="/staff/attendance" element={<ProtectedStaffRoute requiredPermission="attendance"><Attendance /></ProtectedStaffRoute>} />
         <Route path="/staff/reports" element={<ProtectedStaffRoute requiredPermission="reports"><StaffReports /></ProtectedStaffRoute>} />
         <Route path="/staff/requests" element={<ProtectedStaffRoute requiredPermission="requests"><StaffRequests /></ProtectedStaffRoute>} />
-        <Route path="/staff/students" element={<ProtectedStaffRoute requiredPermission="students"><StaffStudents /></ProtectedStaffRoute>} />
+        <Route path="/staff/students" element={<ProtectedStaffRoute requiredPermission="contact_directory"><StaffStudents /></ProtectedStaffRoute>} />
         <Route path="/staff/deputy" element={<ProtectedStaffRoute requiredPermission="deputy"><StaffDeputy /></ProtectedStaffRoute>} />
+        <Route path="/staff/observations" element={<ProtectedStaffRoute requiredPermission="observations"><StaffObservations /></ProtectedStaffRoute>} />
         
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

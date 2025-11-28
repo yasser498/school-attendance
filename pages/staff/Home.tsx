@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, MessageSquare, BookUser, BarChart2, ShieldCheck, LogOut, Briefcase } from 'lucide-react';
+import { ClipboardCheck, MessageSquare, BookUser, BarChart2, ShieldCheck, LogOut, Briefcase, FileText } from 'lucide-react';
 import { StaffUser } from '../../types';
 
 const StaffHome: React.FC = () => {
@@ -27,6 +27,8 @@ const StaffHome: React.FC = () => {
        else if (perms.includes('students')) navigate('/staff/students', { replace: true });
        else if (perms.includes('deputy')) navigate('/staff/deputy', { replace: true });
        else if (perms.includes('reports')) navigate('/staff/reports', { replace: true });
+       else if (perms.includes('contact_directory')) navigate('/staff/students', { replace: true }); // Reuse student dir
+       else if (perms.includes('observations')) navigate('/staff/observations', { replace: true });
     }
     // Otherwise, stay here and show the menu
   }, [navigate]);
@@ -61,12 +63,28 @@ const StaffHome: React.FC = () => {
       color: 'bg-purple-50 text-purple-600 border-purple-100'
     },
     {
+      key: 'contact_directory', // Same as students but different permission key
+      title: 'دليل التواصل',
+      desc: 'أرقام التواصل مع أولياء الأمور.',
+      icon: BookUser,
+      path: '/staff/students',
+      color: 'bg-indigo-50 text-indigo-600 border-indigo-100'
+    },
+    {
       key: 'deputy',
       title: 'وكيل الشؤون الطلابية',
       desc: 'إدارة السلوك والمواظبة والإجراءات الإدارية.',
       icon: Briefcase,
       path: '/staff/deputy',
       color: 'bg-red-50 text-red-600 border-red-100'
+    },
+    {
+      key: 'observations',
+      title: 'ملاحظات الطلاب',
+      desc: 'تسجيل الملاحظات السلوكية والأكاديمية اليومية.',
+      icon: FileText,
+      path: '/staff/observations',
+      color: 'bg-pink-50 text-pink-600 border-pink-100'
     },
     {
       key: 'reports',

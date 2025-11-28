@@ -92,6 +92,10 @@ export interface BehaviorRecord {
   notes?: string;
   staffId?: string;
   createdAt?: string;
+  // Parent Feedback
+  parentViewed?: boolean;
+  parentFeedback?: string;
+  parentViewedAt?: string;
 }
 
 export interface AdminInsight {
@@ -114,4 +118,22 @@ export interface Referral {
   referredBy: string;
   notes?: string;
   createdAt?: string;
+}
+
+export interface StudentObservation {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  date: string;
+  type: 'academic' | 'behavioral' | 'positive' | 'general';
+  content: string;
+  staffId: string;
+  staffName: string;
+  createdAt?: string;
+  // Parent Feedback
+  parentViewed?: boolean;
+  parentFeedback?: string;
+  parentViewedAt?: string;
 }

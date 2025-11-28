@@ -198,12 +198,17 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
                  <NavItem to="/staff/requests" icon={MessageSquare} label="طلبات الأعذار" badge={pendingCount} />
                )}
 
-               {hasPermission('students') && (
-                 <NavItem to="/staff/students" icon={BookUser} label="دليل الطلاب" />
+               {/* New Permissions Handling */}
+               {(hasPermission('students') || hasPermission('contact_directory')) && (
+                 <NavItem to="/staff/students" icon={BookUser} label={hasPermission('students') ? "دليل الطلاب" : "دليل التواصل"} />
                )}
 
                {hasPermission('deputy') && (
                  <NavItem to="/staff/deputy" icon={Briefcase} label="وكيل الشؤون" />
+               )}
+
+               {hasPermission('observations') && (
+                 <NavItem to="/staff/observations" icon={FileText} label="ملاحظات الطلاب" />
                )}
 
                {hasPermission('reports') && (

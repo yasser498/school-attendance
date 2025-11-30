@@ -100,12 +100,13 @@ export interface BehaviorRecord {
 
 export interface AdminInsight {
   id: string;
-  targetRole: 'deputy' | 'counselor';
+  targetRole: 'deputy' | 'counselor' | 'bot_context' | 'teachers';
   content: string;
   createdAt: string;
   isRead: boolean;
 }
 
+// Updated Referral for Workflow
 export interface Referral {
   id: string;
   studentId: string;
@@ -114,12 +115,53 @@ export interface Referral {
   className: string;
   referralDate: string;
   reason: string;
-  status: 'pending' | 'in_progress' | 'resolved';
-  referredBy: string;
+  status: 'pending' | 'in_progress' | 'resolved' | 'returned_to_deputy';
+  referredBy: 'admin' | 'deputy' | 'teacher';
   notes?: string;
+  outcome?: string; // Result from counselor
   createdAt?: string;
 }
 
+// New: Guidance Session (For Counselor)
+export interface GuidanceSession {
+  id: string;
+  studentId: string;
+  studentName: string;
+  date: string;
+  sessionType: 'individual' | 'group' | 'parent_meeting';
+  topic: string;
+  recommendations: string;
+  status: 'ongoing' | 'completed';
+}
+
+// --- الإضافات الجديدة ---
+
+export interface StudentPoint {
+  id: string;
+  studentId: string;
+  points: number;
+  reason: string;
+  type: 'behavior' | 'attendance' | 'academic' | 'honor';
+  createdAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  targetUserId: string; // Parent ID or Student ID
+  title: string;
+  message: string;
+  isRead: boolean;
+  type: 'alert' | 'info' | 'success';
+  createdAt: string;
+}
+
+export interface ParentLink {
+  id: string;
+  parentCivilId: string;
+  studentId: string;
+}
+
+// تحديث واجهة الملاحظات لتشمل تحليل الذكاء الاصطناعي
 export interface StudentObservation {
   id: string;
   studentId: string;
@@ -132,8 +174,59 @@ export interface StudentObservation {
   staffId: string;
   staffName: string;
   createdAt?: string;
-  // Parent Feedback
   parentViewed?: boolean;
   parentFeedback?: string;
   parentViewedAt?: string;
+  // AI Fields
+  sentiment?: 'positive' | 'negative' | 'neutral';
+}
+
+export interface SchoolNews {
+  id: string;
+  title: string;
+  content: string;
+  author: string;
+  isUrgent: boolean;
+  createdAt: string;
+}
+
+// New Types for Appointments
+export interface AppointmentSlot {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  maxCapacity: number;
+  currentBookings: number;
+}
+
+export interface Appointment {
+  id: string;
+  slotId: string;
+  studentId: string;
+  studentName: string;
+  parentName: string;
+  parentCivilId: string;
+  visitReason: string;
+  status: 'pending' | 'completed' | 'cancelled' | 'missed';
+  arrivedAt?: string;
+  slot?: AppointmentSlot; // Joined data
+  createdAt: string;
+}
+
+// New Type for Student Exit Permission (Istithan)
+export interface ExitPermission {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  parentName: string;
+  parentPhone: string;
+  reason?: string;
+  createdBy: string;
+  createdByName?: string; // New: Authorizer Name
+  status: 'pending_pickup' | 'completed' | 'expired';
+  createdAt: string;
+  completedAt?: string;
 }

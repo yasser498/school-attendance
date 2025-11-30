@@ -1,14 +1,23 @@
-
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Lock, ArrowRight, KeyRound, Loader2 } from 'lucide-react';
 import { authenticateStaff } from '../../services/storage';
+
+const { useNavigate } = ReactRouterDOM as any;
 
 const StaffLogin: React.FC = () => {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Check if already logged in
+  useEffect(() => {
+      const session = localStorage.getItem('ozr_staff_session');
+      if (session) {
+          navigate('/staff/home', { replace: true });
+      }
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,8 +28,7 @@ const StaffLogin: React.FC = () => {
       const user = await authenticateStaff(passcode);
       if (user) {
         localStorage.setItem('ozr_staff_session', JSON.stringify(user));
-        // Redirect to the new Smart Home Dashboard
-        navigate('/staff/home');
+        navigate('/staff/home', { replace: true });
       } else {
         setError('رمز الدخول غير صحيح');
       }
@@ -34,7 +42,7 @@ const StaffLogin: React.FC = () => {
   const SCHOOL_LOGO = "https://www.raed.net/img?id=1471924";
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 animate-fade-in">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-10 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-amber-500"></div>
         <div className="text-center mb-10">

@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Search, UploadCloud, AlertTriangle, Loader2, FileSpreadsheet, RefreshCw, CheckSquare, Square, X, AlertCircle, WifiOff } from 'lucide-react';
 import { getStudents, syncStudentsBatch, getStudentsSync, addStudent, deleteStudent } from '../../services/storage';
 import { Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // Declare XLSX for TypeScript since it's loaded via CDN in index.html
 declare var XLSX: any;
@@ -259,61 +259,6 @@ const Students: React.FC = () => {
   const inputClasses = "w-full p-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all";
   const labelClasses = "block text-sm font-semibold text-slate-700 mb-1.5";
 
-  // --- Virtualized Row Component ---
-  const Row = ({ index, style }: ListChildComponentProps) => {
-    const s = filteredStudents[index];
-    const isSelected = selectedIds.includes(s.id);
-    
-    return (
-      <div 
-        style={style} 
-        className={`flex items-center border-b border-slate-50 hover:bg-slate-50 transition-colors px-2 text-sm ${isSelected ? 'bg-blue-50/50' : ''}`}
-      >
-        {/* Checkbox (5%) */}
-        <div className="w-[5%] flex justify-center">
-            <button 
-                onClick={() => handleSelectOne(s.id)} 
-                className={`${isSelected ? 'text-blue-900' : 'text-slate-300 hover:text-slate-400'}`}
-            >
-                {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-            </button>
-        </div>
-
-        {/* Name (25%) */}
-        <div className="w-[25%] p-2 font-bold text-slate-900 truncate">
-            {s.name}
-        </div>
-
-        {/* ID (15%) */}
-        <div className="w-[15%] p-2 font-mono text-slate-600 truncate">
-            {s.studentId}
-        </div>
-
-        {/* Grade (15%) */}
-        <div className="w-[15%] p-2 text-slate-700 truncate">
-            {s.grade}
-        </div>
-
-        {/* Class (10%) */}
-        <div className="w-[10%] p-2 text-slate-700 truncate">
-            {s.className}
-        </div>
-
-        {/* Phone (20%) */}
-        <div className="w-[20%] p-2 text-slate-700 dir-ltr text-right truncate">
-            {s.phone}
-        </div>
-
-        {/* Action (10%) */}
-        <div className="w-[10%] p-2 flex justify-center">
-            <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                <Trash2 size={16}/>
-            </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6 animate-fade-in relative">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -407,7 +352,7 @@ const Students: React.FC = () => {
         </div>
       )}
 
-      {/* Virtualized Table Container */}
+      {/* Table Container */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-[600px] flex flex-col">
         {/* Table Header - Static Flex Div */}
         <div className="flex bg-slate-50 text-slate-700 text-sm font-bold border-b border-slate-200 pr-2 pl-4 py-4 uppercase tracking-wider">
@@ -437,18 +382,59 @@ const Students: React.FC = () => {
                 <p>لا توجد بيانات طلاب. قم بإضافة طلاب أو رفع ملف Excel.</p>
             </div>
         ) : !error ? (
-            // Virtualized List
-            <div className="flex-1" style={{ direction: 'ltr' }}>
-                 <List
-                    height={550}
-                    itemCount={filteredStudents.length}
-                    itemSize={60}
-                    width={'100%'}
-                    direction="rtl"
-                    className="scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
-                 >
-                    {Row}
-                 </List>
+            // Standard List (No react-window)
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                 {filteredStudents.map((s) => {
+                    const isSelected = selectedIds.includes(s.id);
+                    return (
+                      <div 
+                        key={s.id}
+                        className={`flex items-center border-b border-slate-50 hover:bg-slate-50 transition-colors px-2 text-sm h-[60px] ${isSelected ? 'bg-blue-50/50' : ''}`}
+                      >
+                        {/* Checkbox (5%) */}
+                        <div className="w-[5%] flex justify-center">
+                            <button 
+                                onClick={() => handleSelectOne(s.id)} 
+                                className={`${isSelected ? 'text-blue-900' : 'text-slate-300 hover:text-slate-400'}`}
+                            >
+                                {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                            </button>
+                        </div>
+
+                        {/* Name (25%) */}
+                        <div className="w-[25%] p-2 font-bold text-slate-900 truncate">
+                            {s.name}
+                        </div>
+
+                        {/* ID (15%) */}
+                        <div className="w-[15%] p-2 font-mono text-slate-600 truncate">
+                            {s.studentId}
+                        </div>
+
+                        {/* Grade (15%) */}
+                        <div className="w-[15%] p-2 text-slate-700 truncate">
+                            {s.grade}
+                        </div>
+
+                        {/* Class (10%) */}
+                        <div className="w-[10%] p-2 text-slate-700 truncate">
+                            {s.className}
+                        </div>
+
+                        {/* Phone (20%) */}
+                        <div className="w-[20%] p-2 text-slate-700 dir-ltr text-right truncate">
+                            {s.phone}
+                        </div>
+
+                        {/* Action (10%) */}
+                        <div className="w-[10%] p-2 flex justify-center">
+                            <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                                <Trash2 size={16}/>
+                            </button>
+                        </div>
+                      </div>
+                    );
+                 })}
             </div>
         ) : (
             <div className="flex-1 bg-slate-50"></div>

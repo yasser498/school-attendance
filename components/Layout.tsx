@@ -1,9 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, MessageSquare, BookUser, LayoutGrid, Briefcase, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import * as ReactRouterDOM from 'react-router-dom';
+import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, MessageSquare, BookUser, LayoutGrid, Briefcase, ChevronLeft, ChevronRight, Settings, Sparkles, UserCircle, ScanLine, LogOut as ExitIcon } from 'lucide-react';
 import { StaffUser } from '../types';
 import { getPendingRequestsCountForStaff } from '../services/storage';
+import ChatBot from './ChatBot';
+
+const { Link, useLocation } = ReactRouterDOM as any;
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -59,22 +62,22 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
-  const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
+  const NavItem = ({ to, icon: Icon, label, badge, activeColor = 'blue' }: { to: string, icon: any, label: string, badge?: number, activeColor?: string }) => (
     <Link 
       to={to} 
       className={`
-        flex items-center gap-3 px-4 py-3.5 rounded-lg transition-all duration-200 font-medium relative group
+        flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-bold relative group mb-1
         ${isActive(to) 
-          ? 'bg-blue-50 text-blue-900' 
-          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+          ? `bg-${activeColor}-50 text-${activeColor}-900 shadow-sm` 
+          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
         ${isSidebarCollapsed ? 'justify-center px-2' : ''}
       `}
       title={isSidebarCollapsed ? label : ''}
     >
-      <Icon size={22} className={`shrink-0 ${isActive(to) ? 'text-blue-900' : 'text-slate-500 group-hover:text-slate-800'}`} />
+      <Icon size={22} className={`shrink-0 transition-colors ${isActive(to) ? `text-${activeColor}-600` : 'text-slate-400 group-hover:text-slate-600'}`} />
       
       {!isSidebarCollapsed && (
-        <span className="truncate transition-opacity duration-300">{label}</span>
+        <span className="truncate">{label}</span>
       )}
 
       {/* Badge Logic */}
@@ -83,7 +86,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
           absolute bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm
           ${isSidebarCollapsed 
             ? 'top-2 right-2 w-4 h-4 border-2 border-white' 
-            : 'right-4 top-1/2 -translate-y-1/2 px-2 py-0.5 min-w-[20px]'}
+            : 'left-4 top-1/2 -translate-y-1/2 px-2 py-0.5 min-w-[20px]'}
         `}>
           {badge}
         </span>
@@ -91,13 +94,21 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
       
       {/* Active Indicator Bar */}
       {isActive(to) && (
-        <div className="absolute left-0 top-2 bottom-2 w-1 bg-blue-900 rounded-r-full"></div>
+        <div className={`absolute right-0 top-3 bottom-3 w-1 bg-${activeColor}-600 rounded-l-full`}></div>
       )}
     </Link>
   );
 
+  const SectionLabel = ({ label }: { label: string }) => (
+    !isSidebarCollapsed ? (
+      <div className="px-4 py-2 mt-4 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+        {label}
+      </div>
+    ) : <div className="my-2 border-t border-slate-100 mx-4"></div>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden font-sans">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm shrink-0 h-16">
         <div className="flex items-center gap-3 font-bold text-slate-800 text-sm">
@@ -117,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
         fixed md:relative top-0 h-full bg-white border-l border-slate-200 shadow-xl md:shadow-none z-40
         transition-all duration-300 ease-in-out flex flex-col
         ${isMobileMenuOpen ? 'translate-x-0 w-72' : 'translate-x-full md:translate-x-0'}
-        ${isSidebarCollapsed ? 'md:w-20' : 'md:w-72'}
+        ${isSidebarCollapsed ? 'md:w-24' : 'md:w-72'}
         right-0
       `}>
         {/* Mobile Close Button */}
@@ -130,31 +141,36 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
         {/* Desktop Toggle Button */}
         <button 
           onClick={toggleSidebar}
-          className="hidden md:flex absolute -left-3 top-8 bg-white border border-slate-200 rounded-full p-1 text-slate-400 hover:text-blue-900 hover:border-blue-300 shadow-sm z-50 transition-colors"
+          className="hidden md:flex absolute -left-3 top-10 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-blue-900 hover:border-blue-300 shadow-sm z-50 transition-colors"
         >
-          {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
         {/* Header Section */}
-        <div className={`p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3 shrink-0 transition-all ${isSidebarCollapsed ? 'py-4 px-2' : ''}`}>
-          <img src={SCHOOL_LOGO} alt="School Logo" className={`object-contain drop-shadow-sm transition-all ${isSidebarCollapsed ? 'w-10 h-10' : 'w-20 h-20'}`} />
+        <div className={`p-6 border-b border-slate-100 hidden md:flex flex-col items-center text-center gap-3 shrink-0 transition-all ${isSidebarCollapsed ? 'py-6 px-2' : ''}`}>
+          <div className="relative">
+             <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full"></div>
+             <img src={SCHOOL_LOGO} alt="School Logo" className={`relative object-contain drop-shadow-sm transition-all ${isSidebarCollapsed ? 'w-10 h-10' : 'w-20 h-20'}`} />
+          </div>
           {!isSidebarCollapsed && (
             <div className="animate-fade-in">
               <h1 className="font-extrabold text-blue-900 text-base leading-tight px-2">{SCHOOL_NAME}</h1>
-              <p className="text-[10px] text-amber-600 font-bold mt-1 uppercase tracking-wider">نظام الإدارة الذكي</p>
+              <p className="text-[10px] text-slate-400 font-bold mt-1 bg-slate-50 px-2 py-0.5 rounded-full inline-block">نظام الإدارة الذكي</p>
             </div>
           )}
         </div>
 
         {/* Scrollable Navigation Links */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-slate-200 pb-20 md:pb-4">
+        <nav className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-slate-200 pb-20 md:pb-4 space-y-1">
           
           {role === 'public' && (
             <>
-              <NavItem to="/" icon={Home} label="الرئيسية" />
-              <NavItem to="/submit" icon={FileText} label="تقديم عذر" />
-              <NavItem to="/inquiry" icon={Search} label="استعلام عن طالب" />
-              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              <NavItem to="/" icon={Home} label="الرئيسية" activeColor="blue" />
+              <SectionLabel label="خدمات أولياء الأمور" />
+              <NavItem to="/inquiry" icon={UserCircle} label="بوابة ولي الأمر" activeColor="purple" />
+              <NavItem to="/submit" icon={FileText} label="تقديم عذر غياب" activeColor="emerald" />
+              
+              <SectionLabel label="منسوبي المدرسة" />
               <NavItem to="/staff/login" icon={Users} label="دخول المعلمين" />
               <NavItem to="/admin/login" icon={ShieldCheck} label="بوابة الإدارة" />
             </>
@@ -162,20 +178,22 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
           {role === 'admin' && (
             <>
-              {!isSidebarCollapsed && <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">لوحة التحكم</div>}
+              <NavItem to="/admin/dashboard" icon={LayoutGrid} label="مركز القيادة" activeColor="indigo" />
               
-              <NavItem to="/admin/dashboard" icon={LayoutGrid} label="مركز القيادة" />
-              <NavItem to="/admin/requests" icon={FileText} label="طلبات الأعذار" />
-              <NavItem to="/admin/attendance-reports" icon={BarChart2} label="سجل الغياب اليومي" />
-              <NavItem to="/admin/attendance-stats" icon={MessageSquare} label="الإحصائيات والتحليل" />
+              <SectionLabel label="العمليات اليومية" />
+              <NavItem to="/admin/requests" icon={FileText} label="طلبات الأعذار" activeColor="amber" />
+              <NavItem to="/admin/attendance-reports" icon={BarChart2} label="سجل الغياب اليومي" activeColor="emerald" />
+              
+              <SectionLabel label="التحليل والبيانات" />
+              <NavItem to="/admin/attendance-stats" icon={Sparkles} label="تحليل الذكاء الاصطناعي" activeColor="purple" />
               <NavItem to="/admin/students" icon={Search} label="الطلاب والبيانات" />
               <NavItem to="/admin/users" icon={Users} label="إدارة المستخدمين" />
               
-              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              <div className="my-4 border-t border-slate-100"></div>
               
               <button 
                 onClick={onLogout}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-colors duration-200 font-bold shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
                 title="تسجيل خروج"
               >
                 <LogOut size={22} className="shrink-0" />
@@ -186,40 +204,51 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
           {role === 'staff' && (
             <>
-               {!isSidebarCollapsed && <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mt-2">بوابة المعلم</div>}
-               
-               <NavItem to="/staff/home" icon={Home} label="القائمة الرئيسية" />
+               <NavItem to="/staff/home" icon={Home} label="القائمة الرئيسية" activeColor="blue" />
 
+               <SectionLabel label="المهام اليومية" />
+               {hasPermission('gate_security') && (
+                 <NavItem to="/staff/gate" icon={ScanLine} label="ماسح البوابة" activeColor="teal" />
+               )}
+               {hasPermission('exit_perms') && (
+                 <NavItem to="/staff/exit-permissions" icon={ExitIcon} label="استئذان الطلاب" activeColor="orange" />
+               )}
                {hasPermission('attendance') && (
-                 <NavItem to="/staff/attendance" icon={ClipboardCheck} label="رصد الغياب" />
+                 <NavItem to="/staff/attendance" icon={ClipboardCheck} label="رصد الغياب" activeColor="emerald" />
                )}
-
-               {hasPermission('requests') && (
-                 <NavItem to="/staff/requests" icon={MessageSquare} label="طلبات الأعذار" badge={pendingCount} />
-               )}
-
-               {/* New Permissions Handling */}
-               {(hasPermission('students') || hasPermission('contact_directory')) && (
-                 <NavItem to="/staff/students" icon={BookUser} label={hasPermission('students') ? "دليل الطلاب" : "دليل التواصل"} />
-               )}
-
-               {hasPermission('deputy') && (
-                 <NavItem to="/staff/deputy" icon={Briefcase} label="وكيل الشؤون" />
-               )}
-
                {hasPermission('observations') && (
-                 <NavItem to="/staff/observations" icon={FileText} label="ملاحظات الطلاب" />
+                 <NavItem to="/staff/observations" icon={FileText} label="ملاحظات الطلاب" activeColor="pink" />
+               )}
+               {hasPermission('requests') && (
+                 <NavItem to="/staff/requests" icon={MessageSquare} label="طلبات الأعذار" badge={pendingCount} activeColor="amber" />
+               )}
+
+               <SectionLabel label="الإدارة والتوجيه" />
+               {/* Counselor Role */}
+               {hasPermission('students') && (
+                 <NavItem to="/staff/students" icon={BookUser} label="مكتب الموجه الطلابي" activeColor="purple" />
+               )}
+
+               {/* Deputy Role */}
+               {hasPermission('deputy') && (
+                 <NavItem to="/staff/deputy" icon={Briefcase} label="مكتب وكيل الشؤون" activeColor="red" />
+               )}
+
+               <SectionLabel label="معلومات" />
+               {/* Contact Directory (Teachers) */}
+               {hasPermission('contact_directory') && !hasPermission('students') && (
+                 <NavItem to="/staff/directory" icon={BookUser} label="دليل التواصل" />
                )}
 
                {hasPermission('reports') && (
-                 <NavItem to="/staff/reports" icon={BarChart2} label="تقاريري" />
+                 <NavItem to="/staff/reports" icon={BarChart2} label="تقارير فصولي" />
                )}
 
-              <div className="border-t border-slate-100 my-3 mx-2 shrink-0"></div>
+              <div className="my-4 border-t border-slate-100"></div>
               
               <button 
                 onClick={onLogout}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-colors duration-200 font-bold shrink-0 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
                 title="تسجيل خروج"
               >
                 <LogOut size={22} className="shrink-0" />
@@ -232,8 +261,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
         {/* Footer Info - Fixed at Bottom */}
         {!isSidebarCollapsed && (
           <div className="p-4 text-center text-[10px] text-slate-400 bg-slate-50/50 border-t border-slate-100 shrink-0 hidden md:block">
-            <p>© 2024 نظام عذر</p>
-            <p className="text-blue-800 font-bold mt-0.5 truncate px-2">{SCHOOL_NAME}</p>
+            <p className="font-bold">نظام عذر المدرسي</p>
+            <p className="mt-0.5 truncate px-2">{SCHOOL_NAME}</p>
           </div>
         )}
       </aside>
@@ -244,6 +273,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
           {children}
         </div>
       </main>
+
+      {/* Chat Bot Widget */}
+      <ChatBot />
 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (

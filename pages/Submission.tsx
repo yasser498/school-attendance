@@ -1,10 +1,11 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2, Lock, X } from 'lucide-react';
 import { getStudents, addRequest, uploadFile } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
 import { GRADES } from '../constants';
+
+const { useNavigate, useSearchParams } = ReactRouterDOM as any;
 
 const Submission: React.FC = () => {
   const navigate = useNavigate();
@@ -14,8 +15,9 @@ const Submission: React.FC = () => {
   const [dataLoading, setDataLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   
-  // Lock state to prevent changing student details when redirected from profile
-  const [isLocked, setIsLocked] = useState(false);
+  // Lock states to prevent changing details when redirected from profile/alerts
+  const [isStudentLocked, setIsStudentLocked] = useState(false);
+  const [isDateLocked, setIsDateLocked] = useState(false);
 
   // Form State
   const [selectedGrade, setSelectedGrade] = useState('');
@@ -38,10 +40,9 @@ const Submission: React.FC = () => {
     fetchData();
   }, []);
 
-  // Instant Class Loading using Memoization (Fixes lag/empty list)
+  // Instant Class Loading using Memoization
   const availableClasses = useMemo(() => {
     if (!selectedGrade) return [];
-    // Extract distinct classes for the selected grade
     const classes = new Set(
         students
         .filter(s => s.grade === selectedGrade && s.className)
@@ -74,33 +75,23 @@ const Submission: React.FC = () => {
         setSelectedGrade(targetStudent.grade);
         setSelectedClass(targetStudent.className);
         setSelectedStudentId(targetStudent.id);
-        setIsLocked(true); // Lock the fields
+        setIsStudentLocked(true); // Lock the student fields
       }
     }
     if (urlDate) {
       setDate(urlDate);
+      setIsDateLocked(true); // Lock the date field
     }
   }, [searchParams, students, dataLoading]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      
-      // Validation: Size (Max 5MB)
       if (selectedFile.size > 5 * 1024 * 1024) {
         alert("حجم الملف كبير جداً. الحد الأقصى هو 5 ميجابايت.");
-        e.target.value = ''; // Reset input
+        e.target.value = '';
         return;
       }
-      
-      // Validation: Type
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-      if (!allowedTypes.includes(selectedFile.type)) {
-        alert("نوع الملف غير مدعوم. يرجى رفع صورة (JPG/PNG) أو ملف PDF.");
-        e.target.value = ''; // Reset input
-        return;
-      }
-
       setFile(selectedFile);
     }
   };
@@ -111,8 +102,9 @@ const Submission: React.FC = () => {
 
     // Strict Validation
     const selectedDateObj = new Date(date);
-    const day = selectedDateObj.getDay(); // 0=Sun... 5=Fri, 6=Sat
+    const day = selectedDateObj.getDay(); 
     
+    // Check if weekend (Friday=5, Saturday=6)
     if (day === 5 || day === 6) {
         alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
         return;
@@ -130,7 +122,9 @@ const Submission: React.FC = () => {
         return;
     }
 
-    if (diffDays > 7) {
+    // Allow older dates IF it was pre-filled (locked) via the system alert
+    // Otherwise, enforce the 7-day rule
+    if (!isDateLocked && diffDays > 7) {
         alert("عفواً، لا يمكن تقديم عذر لغياب مضى عليه أكثر من 7 أيام.");
         return;
     }
@@ -140,7 +134,6 @@ const Submission: React.FC = () => {
     try {
       const student = students.find(s => s.id === selectedStudentId);
       if (student) {
-        // Upload File
         const attachmentUrl = await uploadFile(file);
 
         if (!attachmentUrl) {
@@ -150,7 +143,7 @@ const Submission: React.FC = () => {
         }
 
         const newRequest: ExcuseRequest = {
-          id: '', // Firestore will generate
+          id: '', 
           studentId: student.studentId,
           studentName: student.name,
           grade: student.grade,
@@ -159,12 +152,12 @@ const Submission: React.FC = () => {
           reason,
           details,
           attachmentName: file.name,
-          attachmentUrl: attachmentUrl, // Use the returned URL
+          attachmentUrl: attachmentUrl, 
           status: RequestStatus.PENDING,
           submissionDate: new Date().toISOString(),
         };
         await addRequest(newRequest);
-        setStep(2); // Success Step
+        setStep(2); 
       }
     } catch (e) {
       console.error(e);
@@ -180,20 +173,22 @@ const Submission: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Reset Lock to allow changing student
+  // Reset Locks to allow new submission
   const unlockForm = () => {
-    setIsLocked(false);
+    setIsStudentLocked(false);
+    setIsDateLocked(false);
     navigate('/submit'); // Clear params
     setSelectedGrade('');
     setSelectedClass('');
     setSelectedStudentId('');
+    setDate('');
   };
 
-  // Date Logic (Past 7 days only)
   const today = new Date();
   const maxDate = today.toISOString().split('T')[0];
+  // Calculate min date only if not locked (if locked, we accept whatever the system passed)
   const minDateObj = new Date();
-  minDateObj.setDate(today.getDate() - 7);
+  minDateObj.setDate(today.getDate() - 30); // Allow system to pass older dates, UI restricts picker
   const minDate = minDateObj.toISOString().split('T')[0];
 
   const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed";
@@ -256,15 +251,15 @@ const Submission: React.FC = () => {
         <form onSubmit={handleSubmit} className="p-5 md:p-10 space-y-6 md:space-y-8">
           
           {/* Locked State Banner */}
-          {isLocked && selectedStudent && (
+          {(isStudentLocked || isDateLocked) && selectedStudent && (
              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between animate-fade-in">
                 <div className="flex items-center gap-3">
                    <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
                       <Lock size={20} />
                    </div>
                    <div>
-                      <p className="text-xs font-bold text-amber-800 uppercase mb-0.5">تقديم عذر محدد للطالب:</p>
-                      <p className="text-sm font-bold text-slate-800">{selectedStudent.name}</p>
+                      <p className="text-xs font-bold text-amber-800 uppercase mb-0.5">تقديم عذر محدد:</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedStudent.name} {isDateLocked && ` - ليوم ${date}`}</p>
                    </div>
                 </div>
                 <button 
@@ -272,7 +267,7 @@ const Submission: React.FC = () => {
                   onClick={unlockForm}
                   className="text-xs bg-white border border-amber-200 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 font-bold transition-colors"
                 >
-                   تغيير الطالب
+                   إلغاء وطلب جديد
                 </button>
              </div>
           )}
@@ -280,13 +275,13 @@ const Submission: React.FC = () => {
           {/* Selection Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <div>
-              <label className={labelClasses}>الصف الدراسي {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
+              <label className={labelClasses}>الصف الدراسي {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
               <select 
                 required
                 value={selectedGrade}
                 onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); setSelectedStudentId(''); }}
                 className={inputClasses}
-                disabled={isLocked}
+                disabled={isStudentLocked}
               >
                 <option value="">اختر الصف...</option>
                 {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
@@ -294,10 +289,10 @@ const Submission: React.FC = () => {
             </div>
 
             <div>
-              <label className={labelClasses}>الفصل {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
+              <label className={labelClasses}>الفصل {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
               <select 
                   required
-                  disabled={!selectedGrade || isLocked}
+                  disabled={!selectedGrade || isStudentLocked}
                   value={selectedClass}
                   onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }}
                   className={inputClasses}
@@ -310,10 +305,10 @@ const Submission: React.FC = () => {
 
           {/* Student Selection */}
           <div>
-            <label className={labelClasses}>اسم الطالب {isLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
+            <label className={labelClasses}>اسم الطالب {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
             <select 
               required
-              disabled={!selectedClass || isLocked}
+              disabled={!selectedClass || isStudentLocked}
               value={selectedStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
               className={inputClasses}
@@ -367,17 +362,6 @@ const Submission: React.FC = () => {
                   )}
                 </button>
               </div>
-
-              {/* Warning Alert */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <AlertTriangle className="text-amber-600 shrink-0 mt-1" size={20} />
-                <div>
-                   <h4 className="text-sm font-bold text-amber-900 mb-1">تنبيه هام</h4>
-                   <p className="text-sm text-amber-800 leading-relaxed">
-                     يرجى حفظ رقم الطالب الظاهر أعلاه. لن تتمكن من الاستعلام عن حالة الطلب لاحقاً إلا باستخدام هذا الرقم.
-                   </p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -386,19 +370,22 @@ const Submission: React.FC = () => {
           {/* Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
              <div>
-              <label className={labelClasses}>تاريخ الغياب</label>
+              <label className={labelClasses}>تاريخ الغياب {isDateLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
               <input 
                 type="date" 
                 required
                 min={minDate}
                 max={maxDate}
                 value={date}
+                disabled={isDateLocked}
                 onChange={(e) => setDate(e.target.value)}
                 className={inputClasses}
               />
-              <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
-                 <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
-              </p>
+              {!isDateLocked && (
+                <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
+                    <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
+                </p>
+              )}
             </div>
              <div>
               <label className={labelClasses}>سبب الغياب</label>

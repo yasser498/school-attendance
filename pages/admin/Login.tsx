@@ -1,18 +1,28 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Lock, ArrowRight } from 'lucide-react';
 import { ADMIN_PASSWORD } from '../../constants';
+
+const { useNavigate } = ReactRouterDOM as any;
 
 const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  // Check if already logged in
+  useEffect(() => {
+      const session = localStorage.getItem('ozr_admin_session');
+      if (session) {
+          navigate('/admin/dashboard', { replace: true });
+      }
+  }, [navigate]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === ADMIN_PASSWORD) {
       localStorage.setItem('ozr_admin_session', 'true');
-      navigate('/admin/dashboard');
+      navigate('/admin/dashboard', { replace: true });
     } else {
       setError('كلمة المرور غير صحيحة');
     }
@@ -21,7 +31,7 @@ const Login: React.FC = () => {
   const SCHOOL_LOGO = "https://www.raed.net/img?id=1471924";
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 animate-fade-in">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-10 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-blue-900"></div>
         <div className="text-center mb-10">

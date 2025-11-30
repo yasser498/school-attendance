@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Calendar, CheckCircle, Clock, XCircle, Save, Check, School, Users, ListChecks, ChevronDown, Loader2 } from 'lucide-react';
 import { getStudents, saveAttendanceRecord, getAttendanceRecordForClass } from '../../services/storage';
 import { Student, StaffUser, AttendanceStatus, AttendanceRecord, ClassAssignment } from '../../types';
+
+const { useNavigate } = ReactRouterDOM as any;
 
 const Attendance: React.FC = () => {
   const navigate = useNavigate();
@@ -292,24 +294,29 @@ const Attendance: React.FC = () => {
          </div>
       )}
 
-      {/* Sticky Save Bar */}
-      <div className="fixed bottom-0 left-0 right-0 md:right-auto md:left-0 md:w-[calc(100%-18rem)] md:mr-72 bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20 flex justify-between items-center">
-        <div className="hidden md:block text-slate-500 text-sm font-medium">
-           تأكد من رصد جميع الطلاب قبل الحفظ
-        </div>
-        <button 
-          onClick={handleSave}
-          disabled={saving}
-          className={`w-full md:w-auto flex items-center justify-center gap-3 px-10 py-3.5 md:py-3 rounded-xl font-bold text-lg shadow-lg transition-all ml-auto active:scale-95
-              ${saved 
-                ? 'bg-emerald-500 text-white shadow-emerald-500/20' 
-                : 'bg-blue-900 text-white hover:bg-blue-800 hover:shadow-blue-900/20'}
-              ${saving ? 'opacity-70 cursor-wait' : ''}
-          `}
-        >
-          {saving ? <Loader2 className="animate-spin" /> : saved ? <Check size={24} /> : <Save size={24} />}
-          <span>{saving ? 'جاري الحفظ...' : saved ? 'تم الحفظ' : 'حفظ الغياب'}</span>
-        </button>
+      {/* Floating Save Button */}
+      <div className="fixed bottom-20 md:bottom-6 left-0 right-0 p-4 flex justify-center z-20 pointer-events-none">
+         <button 
+           onClick={handleSave}
+           disabled={saving || students.length === 0}
+           className={`pointer-events-auto flex items-center gap-3 bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold shadow-2xl shadow-blue-900/40 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-70 disabled:transform-none
+             ${saved ? 'bg-emerald-600 shadow-emerald-900/40' : ''}
+           `}
+         >
+            {saving ? (
+               <>
+                 <Loader2 className="animate-spin" /> جاري الحفظ...
+               </>
+            ) : saved ? (
+               <>
+                 <Check size={24} /> تم الحفظ بنجاح
+               </>
+            ) : (
+               <>
+                 <Save size={24} /> حفظ سجل الحضور
+               </>
+            )}
+         </button>
       </div>
     </div>
   );

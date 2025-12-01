@@ -268,7 +268,59 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
                 ))}
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Mobile Card View (Visible on small screens) */}
+            <div className="md:hidden space-y-4">
+                {filteredStats.map((stat, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 className="font-bold text-slate-900">{stat.student.name}</h4>
+                                <p className="text-xs text-slate-500">{stat.student.grade} - {stat.student.className}</p>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                stat.riskLevel === 'high' ? 'bg-red-100 text-red-700' :
+                                stat.riskLevel === 'medium' ? 'bg-amber-100 text-amber-700' :
+                                'bg-emerald-100 text-emerald-700'
+                            }`}>
+                                {stat.riskLevel === 'high' ? 'مرتفع' : stat.riskLevel === 'medium' ? 'متوسط' : 'طبيعي'}
+                            </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs mb-4 bg-slate-50 p-2 rounded-lg">
+                            <div>
+                                <span className="block font-bold text-red-600 text-lg">{stat.absent}</span>
+                                <span className="text-slate-400">بدون عذر</span>
+                            </div>
+                            <div>
+                                <span className="block font-bold text-blue-600 text-lg">{stat.excusedAbsent}</span>
+                                <span className="text-slate-400">بعذر</span>
+                            </div>
+                            <div>
+                                <span className="block font-bold text-amber-600 text-lg">{stat.late}</span>
+                                <span className="text-slate-400">تأخر</span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button onClick={() => handleAction(stat.student.id, 'call')} className="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 hover:bg-blue-100">
+                                <Phone size={14}/> اتصال
+                            </button>
+                            <button onClick={() => handleReferToCounselor(stat.student)} className="flex-1 bg-purple-50 text-purple-600 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 hover:bg-purple-100">
+                                <Forward size={14}/> تحويل
+                            </button>
+                            {onPrintAction && (
+                                <button onClick={() => onPrintAction(stat.student, 'summons')} className="flex-1 bg-red-50 text-red-600 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 hover:bg-red-100">
+                                    <FileWarning size={14}/> استدعاء
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+                {filteredStats.length === 0 && <p className="text-center py-10 text-slate-400">لا توجد بيانات</p>}
+            </div>
+
+            {/* Desktop Table View (Hidden on mobile) */}
+            <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full text-right text-sm">
                     <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase border-b border-slate-100">
                     <tr>
@@ -338,7 +390,46 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
                   </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Mobile Cards for Consecutive */}
+              <div className="md:hidden space-y-4">
+                  {consecutiveStats.map((item, idx) => (
+                      <div key={idx} className="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
+                          <div className="flex justify-between items-center mb-2">
+                              <div>
+                                  <h4 className="font-bold text-slate-900">{item.student.name}</h4>
+                                  <p className="text-xs text-slate-500">{item.student.grade} - {item.student.className}</p>
+                              </div>
+                              <span className="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold">
+                                  {item.streak} أيام
+                              </span>
+                          </div>
+                          
+                          <div className="bg-slate-50 p-2 rounded-lg text-xs font-mono text-slate-600 mb-3 flex flex-wrap gap-1">
+                              {item.dates.map(date => <span key={date} className="bg-white border px-1 rounded">{date}</span>)}
+                          </div>
+
+                          <div className="flex gap-2">
+                              <button onClick={() => handleReferToCounselor(item.student, item.dates)} className="flex-1 bg-purple-600 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-purple-700">
+                                  <Forward size={14}/> تحويل
+                              </button>
+                              {onPrintAction && (
+                                  <>
+                                    <button onClick={() => onPrintAction(item.student, 'referral_print', item.dates)} className="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-slate-200">
+                                        <Printer size={14}/> إحالة
+                                    </button>
+                                    <button onClick={() => onPrintAction(item.student, 'absence_notice', item.dates)} className="flex-1 bg-red-50 text-red-700 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-100">
+                                        <FileWarning size={14}/> إشعار
+                                    </button>
+                                  </>
+                              )}
+                          </div>
+                      </div>
+                  ))}
+                  {consecutiveStats.length === 0 && <p className="text-center py-10 text-slate-400">ممتاز! لا يوجد حالات.</p>}
+              </div>
+
+              {/* Desktop Table for Consecutive */}
+              <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <table className="w-full text-right text-sm">
                       <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase border-b border-slate-100">
                           <tr>

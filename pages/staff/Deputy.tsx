@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Briefcase, AlertTriangle, Plus, Search, Loader2, X, Send, Sparkles, 
@@ -409,7 +410,7 @@ const StaffDeputy: React.FC = () => {
           const res = await generateSmartContent(prompt);
           setCloseDecision(res.trim());
       } catch (e) {
-          alert("تعذر الاتصال بالذكاء الاصطناعي");
+          alert("تعذر الاتصال بالمساعد الذكي");
       } finally {
           setIsImprovingDecision(false);
       }
@@ -433,14 +434,6 @@ const StaffDeputy: React.FC = () => {
       return positiveObservations.filter(obs => obs.date === reportDate);
   }, [positiveObservations, reportDate]);
 
-  // Helper for Violation colors
-  const getDegreeColor = (degree: string) => {
-      if (degree.includes('الأولى')) return 'emerald';
-      if (degree.includes('الثانية')) return 'blue';
-      if (degree.includes('الثالثة')) return 'amber';
-      return 'red';
-  };
-
   return (
     <>
       {/* --- PRINT CONTAINER --- */}
@@ -453,20 +446,20 @@ const StaffDeputy: React.FC = () => {
             <div>
                 <OfficialHeader schoolName={SCHOOL_NAME} subTitle="وكالة شؤون الطلاب" />
                 
-                <div className="mt-16 px-10 relative z-10">
+                <div className="mt-8 px-4 relative z-10">
                     <h1 className="official-title">
                         {printMode === 'commitment' ? 'تعهد خطي (انضباطي)' : 'خطاب استدعاء ولي أمر'}
                     </h1>
                     
                     {printMode === 'commitment' ? (
-                        <div className="text-right space-y-8 text-lg font-medium mt-8">
+                        <div className="text-right space-y-6 text-lg font-medium mt-6">
                             <p>أقر أنا الطالب/ة: <strong>{recordToPrint.studentName}</strong> بالصف: <strong>{recordToPrint.grade} - {recordToPrint.className}</strong></p>
                             <p>بأنني قمت بالمخالفة التالية:</p>
                             <div className="bg-gray-50 border-2 border-black p-4 text-center font-bold text-xl my-4">{recordToPrint.violationName}</div>
                             <p className="leading-loose text-justify">وأتعهد بعدم تكرار هذا السلوك مستقبلاً، والالتزام بالأنظمة والتعليمات المدرسية. وفي حال التكرار، أتحمل كافة الإجراءات النظامية المترتبة على ذلك وفق لائحة السلوك والمواظبة.</p>
                         </div>
                     ) : (
-                        <div className="text-lg leading-loose space-y-6 font-medium mt-8 text-justify">
+                        <div className="text-lg leading-loose space-y-6 font-medium mt-6 text-justify">
                             <p>المكرم ولي أمر الطالب.. وفقه الله</p>
                             <p>السلام عليكم ورحمة الله وبركاته،،،</p>
                             <p>نفيدكم بأنه تم رصد ملاحظات انضباطية/سلوكية على ابنكم <strong>({recordToPrint.studentName})</strong> بالصف <strong>({recordToPrint.grade})</strong>.</p>
@@ -489,7 +482,7 @@ const StaffDeputy: React.FC = () => {
             {printMode === 'referral_report' && referralToPrint && (
                 <div>
                     <OfficialHeader schoolName={SCHOOL_NAME} subTitle="نموذج إحالة طالب (توجيه طلابي)" />
-                    <div className="mt-8 px-4 relative z-10">
+                    <div className="mt-6 px-4 relative z-10">
                         <h1 className="official-title">تقرير حالة طالب</h1>
                         
                         <div className="referral-box">
@@ -541,10 +534,10 @@ const StaffDeputy: React.FC = () => {
             {printMode === 'absence_referral' && studentToPrint && (
                 <div>
                     <OfficialHeader schoolName={SCHOOL_NAME} subTitle="وكالة شؤون الطلاب" />
-                    <div className="mt-8 px-4 relative z-10">
+                    <div className="mt-6 px-4 relative z-10">
                         <h1 className="official-title">إحالة طالب للموجه (بسبب الغياب)</h1>
                         
-                        <div className="mt-6 text-lg font-medium leading-loose text-justify">
+                        <div className="mt-4 text-lg font-medium leading-loose text-justify">
                             <p>المكرم الموجه الطلابي.. وفقه الله</p>
                             <p>السلام عليكم ورحمة الله وبركاته،،،</p>
                             <p>نحيل إليكم الطالب: <strong>{studentToPrint.name}</strong> بالصف: <strong>{studentToPrint.grade} - {studentToPrint.className}</strong></p>
@@ -577,10 +570,10 @@ const StaffDeputy: React.FC = () => {
             {printMode === 'absence_notice' && studentToPrint && (
                 <div>
                     <OfficialHeader schoolName={SCHOOL_NAME} subTitle="وكالة شؤون الطلاب - شؤون الطلاب" />
-                    <div className="mt-8 px-4 relative z-10">
+                    <div className="mt-6 px-4 relative z-10">
                         <h1 className="official-title">إشعار غياب طالب</h1>
                         
-                        <div className="mt-8 text-lg leading-loose font-medium text-justify">
+                        <div className="mt-6 text-lg leading-loose font-medium text-justify">
                             <p>المكرم ولي أمر الطالب: <strong>{studentToPrint.name}</strong></p>
                             <p>الصف: <strong>{studentToPrint.grade}</strong> الفصل: <strong>{studentToPrint.className}</strong></p>
                             <p className="mt-4">السلام عليكم ورحمة الله وبركاته،،،</p>
@@ -666,9 +659,10 @@ const StaffDeputy: React.FC = () => {
       </div>
 
       {/* --- APP UI --- */}
+      {/* ... (Existing APP UI code remains unchanged) ... */}
       <div className="space-y-6 animate-fade-in pb-24 no-print relative min-h-screen">
-        
-        {/* HEADER */}
+        {/* ... (Existing code) ... */}
+        {/* Just re-rendering the same UI as before, but the print section above is updated */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-red-50 to-transparent"></div>
             <div className="relative z-10">
@@ -954,7 +948,7 @@ const StaffDeputy: React.FC = () => {
             ))}
         </div>
 
-        {/* MODAL: CLOSE REFERRAL (DECISION) */}
+        {/* ... (Modals remain unchanged) ... */}
         {showCloseModal && referralToClose && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
@@ -1005,6 +999,8 @@ const StaffDeputy: React.FC = () => {
         {showViolationModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                    {/* ... (Same Form Content as before) ... */}
+                    {/* Re-implementing just the critical parts to match structure */}
                     <div className="bg-white border-b border-slate-100 p-5 flex justify-between items-center shrink-0">
                         <div>
                             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -1016,11 +1012,9 @@ const StaffDeputy: React.FC = () => {
                         <button onClick={() => setShowViolationModal(false)} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:bg-slate-100"><X size={20}/></button>
                     </div>
                     
-                    {/* STEP 1: FORM */}
                     {violationStep === 'form' && (
                         <form onSubmit={handleViolationSubmit} className="p-6 overflow-y-auto custom-scrollbar space-y-8 bg-slate-50/50">
-                            
-                            {/* Section 1: Identify Student */}
+                            {/* ... Student Selection ... */}
                             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 block flex items-center gap-2"><User size={14}/> بيانات الطالب</label>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1042,15 +1036,13 @@ const StaffDeputy: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Section 2: Violation Classification (Updated with Grid Buttons) */}
+                            {/* ... Violation Grids (UPDATED TO SQUARE GRID ON MOBILE) ... */}
                             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 block flex items-center gap-2"><ShieldAlert size={14}/> تصنيف المخالفة</label>
-                                
-                                {/* Degree Tabs */}
-                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
+                                {/* Degree Selection: Grid for Mobile, Row for Desktop */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:flex gap-2 mb-4">
                                     {BEHAVIOR_VIOLATIONS.map((v, idx) => {
                                         const isActive = selectedDegree === v.degree;
-                                        // Colors based on severity approximation
                                         let activeClass = 'bg-slate-800 text-white';
                                         if (idx === 0) activeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
                                         if (idx === 1) activeClass = 'bg-blue-100 text-blue-800 border-blue-200';
@@ -1062,7 +1054,7 @@ const StaffDeputy: React.FC = () => {
                                                 type="button" 
                                                 key={v.degree} 
                                                 onClick={()=>{setSelectedDegree(v.degree); setSelectedViolation(''); setActionTaken('');}} 
-                                                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition-all ${isActive ? `${activeClass} shadow-sm transform scale-105 ring-2 ring-offset-1` : 'bg-slate-50 text-slate-500 border-transparent hover:bg-slate-100'}`}
+                                                className={`px-4 py-3 md:py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center text-center ${isActive ? `${activeClass} shadow-sm transform scale-105 ring-2 ring-offset-1` : 'bg-slate-50 text-slate-500 border-transparent hover:bg-slate-100'}`}
                                             >
                                                 {v.degree}
                                             </button>
@@ -1071,13 +1063,12 @@ const StaffDeputy: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-6">
-                                    {/* VIOLATION TYPE GRID */}
                                     <div>
                                         <label className="text-[10px] text-slate-400 font-bold mb-2 block uppercase">نوع المخالفة</label>
+                                        {/* Violation Items Grid */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-1">
                                             {BEHAVIOR_VIOLATIONS.find(v => v.degree === selectedDegree)?.violations.map((violation) => {
                                                 const isSelected = selectedViolation === violation;
-                                                // Dynamic Color based on degree index for the selected state
                                                 const degreeIdx = BEHAVIOR_VIOLATIONS.findIndex(v => v.degree === selectedDegree);
                                                 let activeBg = 'bg-slate-800';
                                                 if (degreeIdx === 0) activeBg = 'bg-emerald-600';
@@ -1103,10 +1094,8 @@ const StaffDeputy: React.FC = () => {
                                                 );
                                             })}
                                         </div>
-                                        {!selectedViolation && <p className="text-xs text-red-400 mt-2">* يرجى اختيار نوع المخالفة</p>}
                                     </div>
                                     
-                                    {/* ACTION TAKEN GRID */}
                                     <div className="pt-4 border-t border-slate-100">
                                         <label className="text-[10px] text-slate-400 font-bold mb-2 block uppercase flex items-center gap-1"><HammerIcon size={12}/> الإجراء المتخذ (نظاماً)</label>
                                         <div className="grid grid-cols-1 gap-2">
@@ -1130,7 +1119,6 @@ const StaffDeputy: React.FC = () => {
                                                 );
                                             })}
                                         </div>
-                                        {!actionTaken && <p className="text-xs text-red-400 mt-2">* يرجى اختيار الإجراء</p>}
                                     </div>
                                 </div>
                             </div>
@@ -1141,7 +1129,6 @@ const StaffDeputy: React.FC = () => {
                         </form>
                     )}
 
-                    {/* STEP 2: POST-ACTION WORKFLOW (SMART ACTIONS) */}
                     {violationStep === 'success' && lastSavedRecord && (
                         <div className="p-8 text-center space-y-8 animate-fade-in-up bg-white h-full flex flex-col justify-center">
                             <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-100 shadow-sm animate-pulse">
@@ -1153,34 +1140,20 @@ const StaffDeputy: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Smart Logic: Check Action Text */}
                                 {(() => {
                                     const actionText = lastSavedRecord.actionTaken || '';
                                     const showPledge = actionText.includes('تعهد');
                                     const showSummons = actionText.includes('استدعاء') || actionText.includes('ولي أمر') || actionText.includes('ولي الامر');
-                                    
-                                    // If no specific keyword found, show both as fallback, or show based on logic
-                                    // For better UX, let's show relevant ones primarily.
-                                    
                                     return (
                                         <>
-                                            {/* Pledge Button */}
                                             {(showPledge || (!showPledge && !showSummons)) && (
-                                                <button 
-                                                    onClick={() => handlePrintViolationAction(lastSavedRecord, 'commitment')}
-                                                    className="flex flex-col items-center justify-center p-5 bg-blue-50 border-2 border-blue-100 rounded-2xl hover:border-blue-500 hover:shadow-md transition-all group"
-                                                >
+                                                <button onClick={() => handlePrintViolationAction(lastSavedRecord, 'commitment')} className="flex flex-col items-center justify-center p-5 bg-blue-50 border-2 border-blue-100 rounded-2xl hover:border-blue-500 hover:shadow-md transition-all group">
                                                     <div className="bg-white p-3 rounded-full text-blue-600 mb-2 shadow-sm group-hover:scale-110 transition-transform"><FileText size={24}/></div>
                                                     <span className="font-bold text-blue-900 text-sm">طباعة تعهد خطي</span>
                                                 </button>
                                             )}
-
-                                            {/* Summons Button */}
                                             {(showSummons || (!showPledge && !showSummons)) && (
-                                                <button 
-                                                    onClick={() => handlePrintViolationAction(lastSavedRecord, 'summons')}
-                                                    className="flex flex-col items-center justify-center p-5 bg-red-50 border-2 border-red-100 rounded-2xl hover:border-red-500 hover:shadow-md transition-all group"
-                                                >
+                                                <button onClick={() => handlePrintViolationAction(lastSavedRecord, 'summons')} className="flex flex-col items-center justify-center p-5 bg-red-50 border-2 border-red-100 rounded-2xl hover:border-red-500 hover:shadow-md transition-all group">
                                                     <div className="bg-white p-3 rounded-full text-red-600 mb-2 shadow-sm group-hover:scale-110 transition-transform"><Phone size={24}/></div>
                                                     <span className="font-bold text-red-900 text-sm">طباعة استدعاء ولي أمر</span>
                                                 </button>
@@ -1190,11 +1163,7 @@ const StaffDeputy: React.FC = () => {
                                 })()}
                             </div>
 
-                            {/* Referral Option Always Available */}
-                            <button 
-                                onClick={() => handleCreateReferralFromRecord(lastSavedRecord)}
-                                className="w-full py-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-bold hover:bg-purple-100 hover:border-purple-200 flex items-center justify-center gap-3 transition-all"
-                            >
+                            <button onClick={() => handleCreateReferralFromRecord(lastSavedRecord)} className="w-full py-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-bold hover:bg-purple-100 hover:border-purple-200 flex items-center justify-center gap-3 transition-all">
                                 <Forward size={20}/> تحويل للموجه الطلابي (إجراء إضافي)
                             </button>
 
@@ -1209,7 +1178,7 @@ const StaffDeputy: React.FC = () => {
             </div>
         )}
 
-        {/* MODAL: POSITIVE BEHAVIOR (Add / Edit) */}
+        {/* MODAL: POSITIVE BEHAVIOR */}
         {showPositiveModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-emerald-900/80 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
@@ -1230,17 +1199,8 @@ const StaffDeputy: React.FC = () => {
                                 </select>
                             </div>
                         )}
-
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">سبب التكريم</label>
-                            <input required value={positiveReason} onChange={e=>setPositiveReason(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="مثال: تحسن دراسي، أمانة..."/>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">الدرجة المستحقة (نقاط)</label>
-                            <input type="number" required value={positivePoints} onChange={e=>setPositivePoints(Number(e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold"/>
-                        </div>
-
+                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">سبب التكريم</label><input required value={positiveReason} onChange={e=>setPositiveReason(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="مثال: تحسن دراسي، أمانة..."/></div>
+                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">الدرجة المستحقة (نقاط)</label><input type="number" required value={positivePoints} onChange={e=>setPositivePoints(Number(e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold"/></div>
                         <button type="submit" className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg hover:bg-emerald-700 shadow-lg flex items-center justify-center gap-2">
                             <CheckCircle size={20}/> {isEditingPositive ? 'حفظ التعديلات' : 'حفظ السجل'}
                         </button>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Search, Phone, MessageCircle, X, Loader2, BookUser, Copy, Check, School, Smartphone, Inbox, LayoutGrid, HeartHandshake, UserPlus, Users, ArrowRight, ClipboardList, Send, FileText, Printer, Calendar, Plus, ShieldAlert, FileWarning, Eye, TrendingDown, Clock, AlertCircle, CheckCircle, ArrowLeft, RefreshCw, Activity, GitCommit, UserCheck, Sparkles, Archive, Wand2, Edit, Trash2 } from 'lucide-react';
@@ -251,8 +252,6 @@ const StaffStudents: React.FC = () => {
           setSessionRecs(session.recommendations);
           setSessionType(session.sessionType);
           setShowSessionForm(true);
-          // If called from main sessions list, switch to session view within modal isn't needed as we show form directly, 
-          // but we need selectedStudent context for save.
       }
   };
 
@@ -261,8 +260,6 @@ const StaffStudents: React.FC = () => {
       try {
           await deleteGuidanceSession(id);
           fetchData();
-          // If viewing inside modal, refresh there too? Not strictly necessary as modal relies on 'sessions' state for list which is updated by fetchData if we pass it, 
-          // but modal has local state in render... actually modal just filters 'sessions'. So updating 'sessions' is enough.
       } catch (e) { alert("خطأ في الحذف"); }
   };
 
@@ -302,7 +299,7 @@ const StaffStudents: React.FC = () => {
 
     {/* PRINTABLE AREA (Dynamic Content based on Active View) */}
     <div className="printable-area hidden" dir="rtl">
-        {/* Daily Session Report */}
+        {/* ... (Print Templates Unchanged) ... */}
         {printMode === 'daily' && activeView === 'sessions' && (
             <>
                 <OfficialCounselorHeader title="تقرير الجلسات الإرشادية اليومي" date={reportDate} />
@@ -337,7 +334,6 @@ const StaffStudents: React.FC = () => {
             </>
         )}
 
-        {/* Official Single Session Report */}
         {printMode === 'single_session' && sessionToPrint && (
             <>
                 <OfficialCounselorHeader title="محضر جلسة إرشادية" date={sessionToPrint.date} />
@@ -370,7 +366,6 @@ const StaffStudents: React.FC = () => {
             </>
         )}
 
-        {/* Archive Daily Report */}
         {printMode === 'daily' && activeView === 'archive' && (
             <>
                 <OfficialCounselorHeader title="سجل الحالات المكتملة (تقرير يومي)" date={reportDate} />
@@ -440,8 +435,9 @@ const StaffStudents: React.FC = () => {
          )}
       </div>
 
-      {/* VIEW: DASHBOARD */}
+      {/* DASHBOARD VIEW (Unchanged) */}
       {!isDirectoryMode && activeView === 'dashboard' && (
+          // ... (Dashboard code remains as is)
           <div className="space-y-6 animate-fade-in">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="bg-white p-5 rounded-3xl border border-purple-100 shadow-sm text-center">
@@ -509,8 +505,9 @@ const StaffStudents: React.FC = () => {
           </div>
       )}
 
-      {/* VIEW: ARCHIVE (COMPLETED REFERRALS) */}
+      {/* VIEW: ARCHIVE (Unchanged) */}
       {!isDirectoryMode && activeView === 'archive' && (
+          // ... (Archive code remains as is)
           <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
               <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                   <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Archive className="text-emerald-600"/> سجل الحالات المكتملة</h2>
@@ -549,8 +546,9 @@ const StaffStudents: React.FC = () => {
           </div>
       )}
 
-      {/* VIEW: INBOX (INTERACTIVE TRACKING) */}
+      {/* VIEW: INBOX (Unchanged) */}
       {!isDirectoryMode && activeView === 'inbox' && (
+          // ... (Inbox code remains as is)
           <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
               <div className="flex justify-between items-center"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Inbox className="text-blue-600"/> الإحالات الواردة (قيد العمل)</h2><button onClick={fetchData} className="p-2 bg-slate-100 rounded-full"><RefreshCw size={16}/></button></div>
               
@@ -606,8 +604,9 @@ const StaffStudents: React.FC = () => {
           </div>
       )}
 
-      {/* VIEW: SESSIONS (COMPACT TABLE VIEW) */}
+      {/* VIEW: SESSIONS (Unchanged) */}
       {!isDirectoryMode && activeView === 'sessions' && (
+          // ... (Sessions code remains as is)
           <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
                   <h2 className="text-lg font-bold text-slate-800">سجل الجلسات</h2>
@@ -667,7 +666,7 @@ const StaffStudents: React.FC = () => {
           </div>
       )}
 
-      {/* Directory View (Copied from previous implementation) */}
+      {/* Directory View (Improved for Mobile) */}
       {(activeView === 'directory') && (
          <div className="space-y-6 animate-fade-in max-w-5xl mx-auto">
               <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-3 shadow-sm">
@@ -690,12 +689,14 @@ const StaffStudents: React.FC = () => {
                   {filteredStudents.length > 0 ? (
                       <div className="divide-y divide-slate-50">
                           {filteredStudents.map(student => (
-                              <div key={student.id} className="flex items-center px-6 py-4 hover:bg-purple-50/50 transition-colors group">
-                                  <div className="flex-1 flex items-center gap-4 min-w-0">
+                              <div key={student.id} className="flex flex-col sm:flex-row items-center p-4 hover:bg-purple-50/50 transition-colors group gap-4 sm:gap-0">
+                                  
+                                  {/* Student Info */}
+                                  <div className="flex-1 flex items-center gap-4 w-full cursor-pointer" onClick={() => handleOpenStudent(student)}>
                                       <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-base shrink-0 border border-slate-200 group-hover:bg-purple-100 group-hover:text-purple-700 group-hover:border-purple-200 transition-colors">
                                           {student.name.charAt(0)}
                                       </div>
-                                      <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleOpenStudent(student)}>
+                                      <div className="min-w-0 flex-1">
                                           <p className="font-bold text-slate-800 text-base truncate mb-1 group-hover:text-purple-800 transition-colors">{student.name}</p>
                                           <div className="flex flex-wrap items-center gap-3 text-xs">
                                               <span className="flex items-center gap-1 font-mono text-slate-500 dir-ltr bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
@@ -707,16 +708,24 @@ const StaffStudents: React.FC = () => {
                                           </div>
                                       </div>
                                   </div>
-                                  <div className="flex items-center gap-2 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+
+                                  {/* Actions - Now visible on mobile in a new row or stacked */}
+                                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
                                       {student.phone && (
                                           <>
-                                          <button onClick={() => copyToClipboard(student.phone)} className="w-9 h-9 flex items-center justify-center rounded-xl border bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600" title="نسخ"><Copy size={16}/></button>
-                                          <a href={`tel:${student.phone}`} className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100" title="اتصال"><Phone size={16} /></a>
-                                          <button onClick={() => openWhatsApp(student.phone)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100" title="واتساب"><MessageCircle size={16} /></button>
+                                          <button onClick={() => copyToClipboard(student.phone)} className="w-10 h-10 flex items-center justify-center rounded-xl border bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600" title="نسخ"><Copy size={18}/></button>
+                                          <button 
+                                            onClick={() => window.location.href = `tel:${student.phone.replace(/\D/g, '')}`} 
+                                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100" 
+                                            title="اتصال"
+                                          >
+                                            <Phone size={18} />
+                                          </button>
+                                          <button onClick={() => openWhatsApp(student.phone)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100" title="واتساب"><MessageCircle size={18} /></button>
                                           </>
                                       )}
                                       {!isDirectoryMode && (
-                                          <button onClick={() => handleOpenStudent(student)} className="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl shadow-md hover:bg-purple-700 transition-colors flex items-center gap-2"><FileText size={14}/> الملف</button>
+                                          <button onClick={() => handleOpenStudent(student)} className="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl shadow-md hover:bg-purple-700 transition-colors flex items-center gap-2 ml-2 h-10"><FileText size={16}/> الملف</button>
                                       )}
                                   </div>
                               </div>
@@ -727,7 +736,8 @@ const StaffStudents: React.FC = () => {
           </div>
       )}
 
-      {/* STUDENT SELECTOR MODAL & STUDENT MODAL */}
+      {/* STUDENT SELECTOR MODAL & STUDENT MODAL (No changes needed, code omitted for brevity as it was working) */}
+      {/* ... (Existing Modal Code) ... */}
       {isSelectingStudentForSession && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
@@ -823,7 +833,54 @@ const StaffStudents: React.FC = () => {
                           </div>
                       </div>
                   )}
-                  {activeTab === 'info' && (<div className="text-center space-y-8 py-8 animate-fade-in">{selectedStudent.phone ? (<><div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm inline-block"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=tel:${selectedStudent.phone}`} alt="Phone QR" className="w-40 h-40 object-contain mix-blend-multiply"/><p className="text-xs text-slate-400 mt-4 font-bold uppercase tracking-wider">امسح للاتصال السريع</p></div><div className="grid grid-cols-2 gap-4 max-w-sm mx-auto"><button onClick={() => window.location.href=`tel:${selectedStudent.phone}`} className="flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"><Phone size={20}/> اتصال هاتفي</button><button onClick={() => openWhatsApp(selectedStudent.phone)} className="flex items-center justify-center gap-2 bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"><MessageCircle size={20}/> واتساب</button></div></>) : <div className="text-slate-400 py-10"><Smartphone size={64} className="mx-auto mb-4 opacity-20"/><p className="text-lg font-medium">لا يوجد رقم هاتف مسجل.</p></div>}</div>)}
+                  
+                  {activeTab === 'info' && (
+                      <div className="text-center space-y-8 py-8 animate-fade-in">
+                          {selectedStudent.phone ? (
+                              <>
+                                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm inline-block">
+                                      {/* Corrected QR Code Format to allow direct calling */}
+                                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=tel:${selectedStudent.phone.replace(/\D/g, '')}`} alt="Phone QR" className="w-40 h-40 object-contain mix-blend-multiply"/>
+                                      <p className="text-xs text-slate-400 mt-4 font-bold uppercase tracking-wider">امسح للاتصال السريع</p>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+                                      <button 
+                                        onClick={() => window.location.href = `tel:${selectedStudent.phone.replace(/\D/g, '')}`} 
+                                        className="flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                                      >
+                                          <Phone size={20}/> اتصال هاتفي
+                                      </button>
+                                      <button onClick={() => openWhatsApp(selectedStudent.phone)} className="flex items-center justify-center gap-2 bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all">
+                                          <MessageCircle size={20}/> واتساب
+                                      </button>
+                                  </div>
+                              </>
+                          ) : (
+                              <div className="text-slate-400 py-10">
+                                  <Smartphone size={64} className="mx-auto mb-4 opacity-20"/>
+                                  <p className="text-lg font-medium">لا يوجد رقم هاتف مسجل.</p>
+                              </div>
+                          )}
+                      </div>
+                  )}
+                  
+                  {/* ... (Other tabs logic remains unchanged) ... */}
+                  {/* For brevity, omitting re-implementation of History, Behavior, Tracking, Observations tabs as they were correct */}
+                  {(activeTab === 'history' && !isDirectoryMode) && (
+                      <div className="space-y-4 animate-fade-in">
+                          {/* ... existing history table code ... */}
+                          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                              <table className="w-full text-right text-sm">
+                                  <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase border-b border-slate-100"><tr><th className="p-3">التاريخ</th><th className="p-3">الحالة</th></tr></thead>
+                                  <tbody className="divide-y divide-slate-50">
+                                      {studentHistory.length > 0 ? studentHistory.map((h, i) => (
+                                          <tr key={i}><td className="p-3 font-mono">{h.date}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${h.status === 'ABSENT' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{h.status === 'ABSENT' ? 'غائب' : 'تأخر'}</span></td></tr>
+                                      )) : <tr><td colSpan={2} className="p-4 text-center text-slate-400">سجل نظيف</td></tr>}
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  )}
               </div>
            </div>
         </div>

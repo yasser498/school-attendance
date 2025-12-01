@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2, Lock, CalendarDays, X } from 'lucide-react';
+import { Upload, CheckCircle, Calendar, User, FileText, Sparkles, AlertCircle, ChevronRight, Home, Paperclip, CalendarDays, Clock, ArrowRight } from 'lucide-react';
 import { getStudents, addRequest, uploadFile } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
 import { GRADES } from '../constants';
@@ -11,12 +11,11 @@ const { useNavigate, useSearchParams } = ReactRouterDOM as any;
 const Submission: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1: Form, 2: Success
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
   
-  // Lock states to prevent changing details when redirected from profile/alerts
+  // Lock states
   const [isStudentLocked, setIsStudentLocked] = useState(false);
   const [isDateLocked, setIsDateLocked] = useState(false);
 
@@ -37,6 +36,8 @@ const Submission: React.FC = () => {
   // Data
   const [students, setStudents] = useState<Student[]>([]);
 
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
+
   useEffect(() => {
     const fetchData = async () => {
       const data = await getStudents();
@@ -46,7 +47,6 @@ const Submission: React.FC = () => {
     fetchData();
   }, []);
 
-  // Instant Class Loading using Memoization
   const availableClasses = useMemo(() => {
     if (!selectedGrade) return [];
     const classes = new Set(
@@ -57,7 +57,6 @@ const Submission: React.FC = () => {
     return Array.from(classes).sort();
   }, [students, selectedGrade]);
 
-  // Filtered Students based on selection
   const availableStudents = useMemo(() => {
     return students.filter(
       (s) => s.grade === selectedGrade && s.className === selectedClass
@@ -68,7 +67,7 @@ const Submission: React.FC = () => {
     return students.find(s => s.id === selectedStudentId);
   }, [students, selectedStudentId]);
 
-  // Auto-fill from URL parameters
+  // Auto-fill from URL
   useEffect(() => {
     if (dataLoading) return;
 
@@ -81,13 +80,13 @@ const Submission: React.FC = () => {
         setSelectedGrade(targetStudent.grade);
         setSelectedClass(targetStudent.className);
         setSelectedStudentId(targetStudent.id);
-        setIsStudentLocked(true); // Lock the student fields
+        setIsStudentLocked(true);
       }
     }
     if (urlDate) {
       setDate(urlDate);
-      setIsDateLocked(true); // Lock the date field
-      setIsMultiDay(false); // Disable multi-day if specific date requested
+      setIsDateLocked(true);
+      setIsMultiDay(false);
     }
   }, [searchParams, students, dataLoading]);
 
@@ -107,13 +106,10 @@ const Submission: React.FC = () => {
       const dates = [];
       const current = new Date(startDateStr);
       const end = new Date(endDateStr);
-      
-      // Safety break to prevent infinite loops (max 30 days)
       let count = 0;
       while (current <= end && count < 30) {
           const day = current.getDay();
-          // 5 = Friday, 6 = Saturday (Skip weekends)
-          if (day !== 5 && day !== 6) {
+          if (day !== 5 && day !== 6) { // Skip Fri/Sat
               dates.push(new Date(current).toISOString().split('T')[0]);
           }
           current.setDate(current.getDate() + 1);
@@ -125,54 +121,20 @@ const Submission: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!selectedStudentId || !reason || !date || !file) return;
-    if (isMultiDay && !endDate) {
-        alert("يرجى تحديد تاريخ نهاية الغياب.");
-        return;
-    }
-    if (isMultiDay && new Date(endDate) < new Date(date)) {
-        alert("تاريخ النهاية يجب أن يكون بعد تاريخ البداية.");
-        return;
-    }
+    if (isMultiDay && !endDate) { alert("يرجى تحديد تاريخ نهاية الغياب."); return; }
+    if (isMultiDay && new Date(endDate) < new Date(date)) { alert("تاريخ النهاية يجب أن يكون بعد تاريخ البداية."); return; }
 
-    // Determine list of dates to submit
+    // Logic similar to previous implementation
     let datesToSubmit: string[] = [];
     if (isMultiDay) {
         datesToSubmit = getDatesInRange(date, endDate);
-        if (datesToSubmit.length === 0) {
-            alert("الفترة المحددة لا تحتوي على أيام دراسية (عطلة نهاية أسبوع).");
-            return;
-        }
+        if (datesToSubmit.length === 0) { alert("الفترة المحددة لا تحتوي على أيام دراسية."); return; }
     } else {
-        // Single Day Check
         const selectedDateObj = new Date(date);
         const day = selectedDateObj.getDay(); 
-        if (day === 5 || day === 6) {
-            alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
-            return;
-        }
+        if (day === 5 || day === 6) { alert("لا يمكن تقديم عذر في أيام العطلة."); return; }
         datesToSubmit = [date];
-    }
-
-    // Date Range Validity Check (Past 7 days rule)
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const startObj = new Date(date);
-    startObj.setHours(0,0,0,0);
-    
-    const diffTime = today.getTime() - startObj.getTime();
-    const diffDays = diffTime / (1000 * 3600 * 24);
-
-    if (startObj > today) {
-        alert("لا يمكن اختيار تاريخ مستقبلي.");
-        return;
-    }
-
-    // Allow older dates IF it was pre-filled (locked) via the system alert
-    if (!isDateLocked && diffDays > 7) {
-        alert("عفواً، لا يمكن تقديم عذر لغياب مضى عليه أكثر من 7 أيام.");
-        return;
     }
 
     setLoading(true);
@@ -180,17 +142,9 @@ const Submission: React.FC = () => {
     try {
       const student = students.find(s => s.id === selectedStudentId);
       if (student) {
-        // Upload ONE file for all requests
         const attachmentUrl = await uploadFile(file);
+        if (!attachmentUrl) throw new Error("Upload failed");
 
-        if (!attachmentUrl) {
-            alert("فشل رفع المرفق. يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.");
-            setLoading(false);
-            return;
-        }
-
-        // Loop through dates and create a request for each day
-        // This ensures the database stays clean and "Daily Reports" work correctly without modification
         for (const d of datesToSubmit) {
             const newRequest: ExcuseRequest = {
               id: '', 
@@ -208,34 +162,13 @@ const Submission: React.FC = () => {
             };
             await addRequest(newRequest);
         }
-        
         setStep(2); 
       }
     } catch (e) {
-      console.error(e);
-      alert("حدث خطأ أثناء الإرسال. يرجى المحاولة مرة أخرى.");
+      alert("حدث خطأ أثناء الإرسال. تأكد من الاتصال.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Reset Locks to allow new submission
-  const unlockForm = () => {
-    setIsStudentLocked(false);
-    setIsDateLocked(false);
-    navigate('/submit'); // Clear params
-    setSelectedGrade('');
-    setSelectedClass('');
-    setSelectedStudentId('');
-    setDate('');
-    setEndDate('');
-    setIsMultiDay(false);
   };
 
   const today = new Date();
@@ -244,288 +177,191 @@ const Submission: React.FC = () => {
   minDateObj.setDate(today.getDate() - 30); 
   const minDate = minDateObj.toISOString().split('T')[0];
 
-  const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed";
-  const labelClasses = "block text-sm font-bold text-slate-700 mb-2";
-
-  if (dataLoading) {
-    return (
-       <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <Loader2 className="animate-spin text-blue-900 mb-4" size={48} />
-          <p className="text-slate-500 font-bold">جاري الاتصال بالنظام...</p>
-       </div>
-    );
-  }
-
-  if (step === 2) {
-    return (
-      <div className="max-w-lg mx-auto bg-white p-8 rounded-2xl shadow-xl border border-slate-100 text-center space-y-6 animate-fade-in-up mt-12">
-        <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-100">
-          <CheckCircle size={48} />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">تم إرسال الطلب بنجاح</h2>
-          <p className="text-slate-500">سيتم مراجعة العذر من قبل إدارة متوسطة عماد الدين زنكي وإشعاركم بالحالة.</p>
-          {isMultiDay && <p className="text-xs text-blue-600 font-bold mt-2 bg-blue-50 py-1 px-2 rounded-lg inline-block">تم تسجيل طلب منفصل لكل يوم في الفترة المحددة</p>}
-        </div>
-        <div className="pt-6 space-y-3">
-          <button 
-            onClick={() => navigate('/')}
-            className="w-full py-4 md:py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-lg md:text-base"
-          >
-            عودة للرئيسية
-          </button>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full py-4 md:py-3 bg-blue-900 text-white font-bold rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 text-lg md:text-base"
-          >
-            تقديم طلب آخر
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-3xl mx-auto px-2 md:px-0">
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        <div className="bg-blue-900 p-6 md:p-8 text-white relative overflow-hidden">
-          <div className="relative z-10 flex justify-between items-start">
-            <div>
-               <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">تقديم عذر غياب</h2>
-               <p className="text-blue-200 text-xs md:text-sm font-medium opacity-90">نموذج رسمي - متوسطة عماد الدين زنكي</p>
-            </div>
-            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-md border border-white/20">
-               <Sparkles className="text-amber-400" size={24} />
-            </div>
-          </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500 opacity-10 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl pointer-events-none"></div>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="p-5 md:p-10 space-y-6 md:space-y-8">
+    <div className="min-h-screen bg-slate-50 font-sans pb-20">
+      
+      {/* Header Image / Branding */}
+      <div className="bg-blue-900 h-48 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <div className="absolute -bottom-10 -right-10 w-64 h-64 bg-blue-500 rounded-full blur-3xl opacity-30"></div>
+          <div className="absolute top-10 -left-10 w-48 h-48 bg-purple-500 rounded-full blur-3xl opacity-30"></div>
           
-          {/* Locked State Banner */}
-          {(isStudentLocked || isDateLocked) && selectedStudent && (
-             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between animate-fade-in">
-                <div className="flex items-center gap-3">
-                   <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
-                      <Lock size={20} />
-                   </div>
-                   <div>
-                      <p className="text-xs font-bold text-amber-800 uppercase mb-0.5">تقديم عذر محدد:</p>
-                      <p className="text-sm font-bold text-slate-800">{selectedStudent.name} {isDateLocked && ` - ليوم ${date}`}</p>
-                   </div>
+          <div className="max-w-2xl mx-auto px-6 h-full flex flex-col justify-center relative z-10 text-white">
+              <div className="flex items-center gap-2 mb-2 opacity-80">
+                  <Sparkles size={16} className="text-amber-300"/>
+                  <span className="text-xs font-bold uppercase tracking-wider">نظام الإدارة الذكية</span>
+              </div>
+              <h1 className="text-3xl font-extrabold mb-1">{SCHOOL_NAME}</h1>
+              <p className="text-blue-200 text-sm">بوابة تقديم الأعذار الطبية والطارئة</p>
+          </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 -mt-10 relative z-20">
+        
+        {step === 1 && (
+            <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                
+                {/* 1. Student Selection */}
+                <div className="p-6 md:p-8 border-b border-slate-50">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold">1</div>
+                        <h2 className="text-lg font-bold text-slate-800">بيانات الطالب</h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        {!isStudentLocked ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">الصف الدراسي</label>
+                                    <select required value={selectedGrade} onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); setSelectedStudentId(''); }} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 transition-all">
+                                        <option value="">اختر الصف</option>
+                                        {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">الفصل</label>
+                                    <select required disabled={!selectedGrade} value={selectedClass} onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50">
+                                        <option value="">اختر الفصل</option>
+                                        {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
+                                <User className="text-blue-600" size={24}/>
+                                <div>
+                                    <p className="text-xs text-blue-500 font-bold uppercase">تقديم عذر للطالب</p>
+                                    <p className="font-bold text-blue-900">{selectedStudent?.name}</p>
+                                    <p className="text-xs text-blue-700">{selectedStudent?.grade} - {selectedStudent?.className}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {!isStudentLocked && (
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-1.5 block">اسم الطالب</label>
+                                <select required disabled={!selectedClass} value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50">
+                                    <option value="">اختر الطالب من القائمة</option>
+                                    {availableStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <button 
-                  type="button" 
-                  onClick={unlockForm}
-                  className="text-xs bg-white border border-amber-200 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 font-bold transition-colors"
-                >
-                   إلغاء وطلب جديد
-                </button>
-             </div>
-          )}
 
-          {/* Selection Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            <div>
-              <label className={labelClasses}>الصف الدراسي {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
-              <select 
-                required
-                value={selectedGrade}
-                onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); setSelectedStudentId(''); }}
-                className={inputClasses}
-                disabled={isStudentLocked}
-              >
-                <option value="">اختر الصف...</option>
-                {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className={labelClasses}>الفصل {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
-              <select 
-                  required
-                  disabled={!selectedGrade || isStudentLocked}
-                  value={selectedClass}
-                  onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudentId(''); }}
-                  className={inputClasses}
-              >
-                  <option value="">{selectedGrade ? 'اختر الفصل...' : 'اختر الصف أولاً'}</option>
-                  {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Student Selection */}
-          <div>
-            <label className={labelClasses}>اسم الطالب {isStudentLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
-            <select 
-              required
-              disabled={!selectedClass || isStudentLocked}
-              value={selectedStudentId}
-              onChange={(e) => setSelectedStudentId(e.target.value)}
-              className={inputClasses}
-            >
-              <option value="">اختر الطالب من القائمة...</option>
-              {availableStudents.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            {selectedGrade && selectedClass && availableStudents.length === 0 && (
-              <p className="text-sm text-red-500 flex items-center gap-1 mt-2 font-medium">
-                <AlertCircle size={14} /> لا يوجد طلاب مسجلين في هذا الفصل
-              </p>
-            )}
-          </div>
-
-          {/* Removed Student ID Info Alert per request */}
-
-          <div className="border-t border-slate-100 pt-2"></div>
-
-          {/* Date & Range Logic */}
-          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                      <CalendarDays size={18} className="text-blue-600"/>
-                      فترة الغياب
-                  </label>
-                  {!isDateLocked && (
-                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                          <input 
-                              type="checkbox" 
-                              id="multiDay" 
-                              checked={isMultiDay} 
-                              onChange={(e) => { setIsMultiDay(e.target.checked); if(!e.target.checked) setEndDate(''); }}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                          />
-                          <label htmlFor="multiDay" className="text-xs font-bold text-slate-600 cursor-pointer select-none">في حال كان الغياب اكثر من يوم متصل؟</label>
-                      </div>
-                  )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                      <label className="text-xs text-slate-500 font-bold block mb-1">
-                          {isMultiDay ? 'تاريخ البداية (من)' : 'تاريخ الغياب'} {isDateLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}
-                      </label>
-                      <input 
-                          type="date" 
-                          required
-                          min={minDate}
-                          max={maxDate}
-                          value={date}
-                          disabled={isDateLocked}
-                          onChange={(e) => setDate(e.target.value)}
-                          className={inputClasses}
-                      />
-                  </div>
-                  
-                  {isMultiDay && (
-                      <div className="animate-fade-in">
-                          <label className="text-xs text-slate-500 font-bold block mb-1">تاريخ النهاية (إلى)</label>
-                          <input 
-                              type="date" 
-                              required={isMultiDay}
-                              min={date} // Cannot end before start
-                              max={maxDate}
-                              value={endDate}
-                              onChange={(e) => setEndDate(e.target.value)}
-                              className={inputClasses}
-                          />
-                      </div>
-                  )}
-              </div>
-              
-              {!isDateLocked && !isMultiDay && (
-                  <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
-                      <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
-                  </p>
-              )}
-              {isMultiDay && (
-                  <p className="text-xs text-blue-600 mt-2 font-medium flex items-center gap-1 animate-fade-in">
-                      <Info size={12}/> سيتم تسجيل طلب منفصل لكل يوم دراسي في الفترة المحددة.
-                  </p>
-              )}
-          </div>
-
-          {/* Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-             <div>
-              <label className={labelClasses}>سبب الغياب</label>
-              <select 
-                required
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className={inputClasses}
-              >
-                <option value="">اختر السبب...</option>
-                <option value="عذر مرضي">عذر مرضي</option>
-                <option value="ظروف عائلية">ظروف عائلية</option>
-                <option value="موعد مستشفى">موعد مستشفى</option>
-                <option value="حالة طارئة">حالة طارئة</option>
-                <option value="أخرى">أخرى</option>
-              </select>
-            </div>
-            <div>
-                <label className={labelClasses}>تفاصيل إضافية (اختياري)</label>
-                <input 
-                  type="text"
-                  value={details}
-                  onChange={(e) => setDetails(e.target.value)}
-                  className={inputClasses}
-                  placeholder="مثال: ارتفاع في درجة الحرارة..."
-                />
-            </div>
-          </div>
-
-          {/* File Upload */}
-          <div>
-            <label className={labelClasses}>
-              المرفقات (تقرير طبي / إثبات) <span className="text-red-500">*</span>
-            </label>
-            <div className={`border-2 border-dashed rounded-xl p-6 md:p-8 text-center cursor-pointer transition-colors ${file ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 bg-slate-50'}`}>
-              <input 
-                type="file" 
-                id="file-upload"
-                required
-                accept=".jpg,.jpeg,.png,.pdf"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <label htmlFor="file-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center touch-manipulation">
-                {file ? (
-                  <>
-                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3">
-                       <CheckCircle size={24} />
+                {/* 2. Absence Details */}
+                <div className="p-6 md:p-8 border-b border-slate-50">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold">2</div>
+                        <h2 className="text-lg font-bold text-slate-800">تفاصيل الغياب</h2>
                     </div>
-                    <span className="text-emerald-800 font-bold text-lg break-all">{file.name}</span>
-                    <span className="text-xs text-emerald-600 mt-2 font-medium bg-white px-3 py-1 rounded-full border border-emerald-100">اضغط للتغيير</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                       <Upload size={24} />
+
+                    <div className="space-y-5">
+                        {/* Toggle Multi-day */}
+                        {!isDateLocked && (
+                            <div className="bg-slate-50 p-1.5 rounded-xl flex items-center relative">
+                                <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white rounded-lg shadow-sm transition-all duration-300 ${isMultiDay ? 'left-1.5' : 'left-[calc(50%+3px)]'}`}></div>
+                                <button type="button" onClick={() => setIsMultiDay(true)} className={`flex-1 relative z-10 text-sm font-bold py-2 text-center transition-colors ${isMultiDay ? 'text-purple-700' : 'text-slate-500'}`}>
+                                    عدة أيام متصلة
+                                </button>
+                                <button type="button" onClick={() => setIsMultiDay(false)} className={`flex-1 relative z-10 text-sm font-bold py-2 text-center transition-colors ${!isMultiDay ? 'text-purple-700' : 'text-slate-500'}`}>
+                                    يوم واحد
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-1.5 block">تاريخ الغياب (البداية)</label>
+                                <div className="relative">
+                                    <input type="date" required min={minDate} max={maxDate} value={date} disabled={isDateLocked} onChange={(e) => setDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 disabled:bg-slate-100 disabled:text-slate-400" />
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                </div>
+                            </div>
+                            {isMultiDay && (
+                                <div className="animate-fade-in">
+                                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">تاريخ النهاية (إلى)</label>
+                                    <div className="relative">
+                                        <input type="date" required min={date} max={maxDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100" />
+                                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">سبب الغياب</label>
+                            <select required value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100">
+                                <option value="">اختر السبب...</option>
+                                <option value="عذر مرضي">عذر مرضي (تقرير طبي)</option>
+                                <option value="ظروف عائلية">ظروف عائلية</option>
+                                <option value="موعد مستشفى">موعد مستشفى</option>
+                                <option value="حالة طارئة">حالة طارئة</option>
+                                <option value="أخرى">أخرى</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">تفاصيل إضافية (اختياري)</label>
+                            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 resize-none" placeholder="أي ملاحظات إضافية..."></textarea>
+                        </div>
                     </div>
-                    <span className="text-slate-700 font-bold text-lg">اضغط لرفع الملف</span>
-                    <span className="text-sm text-slate-400 mt-2">JPG, PNG, PDF (الحد الأقصى 5 ميجابايت)</span>
-                  </>
-                )}
-              </label>
+                </div>
+
+                {/* 3. Attachments */}
+                <div className="p-6 md:p-8">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">3</div>
+                        <h2 className="text-lg font-bold text-slate-800">المرفقات</h2>
+                    </div>
+
+                    <div className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer relative group ${file ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'}`}>
+                        <input type="file" id="file-upload" required accept=".jpg,.jpeg,.png,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
+                        {file ? (
+                            <div className="flex flex-col items-center animate-fade-in">
+                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm text-emerald-500"><CheckCircle size={32}/></div>
+                                <p className="font-bold text-emerald-800 mb-1 truncate max-w-full px-4">{file.name}</p>
+                                <p className="text-xs text-emerald-600">اضغط للتغيير</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                                <Upload size={40} className="mb-3"/>
+                                <p className="font-bold text-sm">اضغط لرفع التقرير الطبي أو الإثبات</p>
+                                <p className="text-xs mt-1 opacity-70">JPG, PNG, PDF (Max 5MB)</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer Action */}
+                <div className="p-6 bg-slate-50 border-t border-slate-100">
+                    <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                        {loading ? <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> جاري الإرسال...</span> : <>إرسال الطلب <ArrowRight size={20}/></>}
+                    </button>
+                </div>
+            </form>
+        )}
+
+        {/* Success View */}
+        {step === 2 && (
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 text-center animate-fade-in-up">
+                <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                    <CheckCircle size={48} />
+                </div>
+                <h2 className="text-2xl font-extrabold text-slate-800 mb-2">تم استلام طلبك بنجاح</h2>
+                <p className="text-slate-500 mb-8 max-w-xs mx-auto">سيتم مراجعة العذر من قبل إدارة المدرسة والرد عليكم قريباً.</p>
+                
+                <div className="space-y-3">
+                    <button onClick={() => navigate('/')} className="w-full py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2">
+                        <Home size={18}/> العودة للرئيسية
+                    </button>
+                    <button onClick={() => window.location.reload()} className="w-full py-4 bg-white border-2 border-slate-100 text-blue-600 font-bold rounded-2xl hover:border-blue-100 hover:bg-blue-50 transition-colors">
+                        تقديم طلب آخر
+                    </button>
+                </div>
             </div>
-          </div>
+        )}
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-blue-900/10 transition-all mt-4 active:scale-95
-              ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 hover:shadow-xl hover:-translate-y-1'}
-            `}
-          >
-            {loading ? 'جاري الإرسال...' : isMultiDay ? 'إرسال الطلبات للفترة المحددة' : 'إرسال الطلب رسمياً'}
-          </button>
-
-        </form>
       </div>
     </div>
   );

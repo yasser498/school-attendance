@@ -67,15 +67,27 @@ select option {
     print-color-adjust: exact !important;
   }
 
-  /* Hide UI elements */
-  .no-print, nav, header, footer, button, .sidebar, .floating-dock, .admin-header, .custom-scrollbar::-webkit-scrollbar, .hidden-print {
+  /* CRITICAL: Hide Sidebar and Navigation strictly */
+  aside, nav, header, footer, button, .no-print, .sidebar, .floating-dock, .admin-header, .custom-scrollbar::-webkit-scrollbar, .hidden-print {
     display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+  }
+
+  /* Force Main Content to Full Width */
+  main, #root, body {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
   }
 
   /* Specific Print Container Logic */
   #print-container, .printable-area, #exit-report-print, #staff-report-print, #gate-report, #print-area {
     display: block !important;
-    position: relative !important;
+    position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;

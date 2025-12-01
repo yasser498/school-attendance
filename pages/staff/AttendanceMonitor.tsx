@@ -5,7 +5,7 @@ import {
   Filter, Forward, CalendarDays, List, ShieldCheck, Loader2, Printer, FileWarning
 } from 'lucide-react';
 import { getStudents, getAttendanceRecords, addReferral, getRequests } from '../../services/storage';
-import { Student, AttendanceStatus, AttendanceRecord, Referral, ExcuseRequest, RequestStatus } from '../../types';
+import { Student, AttendanceRecord, Referral, ExcuseRequest } from '../../types';
 
 interface AttendanceMonitorProps {
   onPrintAction?: (student: Student, type: 'pledge' | 'summons' | 'referral_print' | 'absence_notice', dates?: string[]) => void;
@@ -48,8 +48,8 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
       
       requests.forEach(req => {
           if (!req) return;
-          // Robust check for approved status
-          if (req.status === RequestStatus.APPROVED) {
+          // Use string literal 'APPROVED' to avoid Enum runtime issues
+          if (req.status === 'APPROVED') {
               if (req.studentId && req.date) {
                   map[`${req.studentId}_${req.date}`] = true;
               }
@@ -77,9 +77,9 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
         r.records.forEach(rec => {
           // Check if student exists in our map (stats)
           if (rec.studentId && stats[rec.studentId]) {
-              const statusStr = String(rec.status); // Force string comparison safety
+              const statusStr = String(rec.status);
               
-              if (statusStr === AttendanceStatus.ABSENT || statusStr === 'ABSENT') {
+              if (statusStr === 'ABSENT') {
                   // Check if this specific absence date has an APPROVED excuse
                   const isExcused = approvedExcusesMap[`${rec.studentId}_${r.date}`];
                   
@@ -88,7 +88,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
                   } else {
                       stats[rec.studentId].absent++; // Count risk only if NOT excused
                   }
-              } else if (statusStr === AttendanceStatus.LATE || statusStr === 'LATE') {
+              } else if (statusStr === 'LATE') {
                   stats[rec.studentId].late++;
               }
           }
@@ -146,7 +146,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ onPrintAction }) 
           const streakDates: string[] = [];
 
           for (const record of history) {
-              if (record.status === AttendanceStatus.ABSENT || record.status === 'ABSENT') {
+              if (record.status === 'ABSENT') {
                   // Check excused status
                   const isExcused = approvedExcusesMap[`${student.studentId}_${record.date}`];
                   

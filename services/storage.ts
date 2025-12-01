@@ -324,6 +324,30 @@ export const uploadFile = async (file: File): Promise<string | null> => {
 export const getStudents = async (force = false) => { const { data, error } = await supabase.from('students').select('*'); if (error) { console.error(error); return []; } return data.map(mapStudentFromDB); };
 export const getStudentsSync = () => null;
 export const getStudentByCivilId = async (id: string) => { const { data, error } = await supabase.from('students').select('*').eq('student_id', id).single(); if (error) return null; return mapStudentFromDB(data); };
+
+// New Function: Search students by phone number
+export const getStudentsByPhone = async (phone: string): Promise<Student[]> => {
+    // Normalize input (remove spaces, dashes)
+    let cleanPhone = phone.replace(/\s+/g, '').replace(/-/g, '');
+    
+    // Create variations to check against DB (stored as 05... usually)
+    // 1. If starts with 966, try replacing with 0
+    let variations = [cleanPhone];
+    if (cleanPhone.startsWith('966')) {
+        variations.push('0' + cleanPhone.substring(3));
+    } else if (cleanPhone.startsWith('05')) {
+        variations.push('966' + cleanPhone.substring(1));
+    }
+
+    const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .in('phone', variations);
+
+    if (error || !data) return [];
+    return data.map(mapStudentFromDB);
+};
+
 export const addStudent = async (student: Student) => { const { data, error } = await supabase.from('students').insert(mapStudentToDB(student)).select().single(); if (error) throw new Error(error.message); return mapStudentFromDB(data); };
 export const updateStudent = async (student: Student) => { const { error } = await supabase.from('students').update(mapStudentToDB(student)).eq('student_id', student.studentId); if (error) throw new Error(error.message); };
 export const deleteStudent = async (id: string) => { const { error } = await supabase.from('students').delete().eq('id', id); if (error) throw new Error(error.message); };
@@ -555,7 +579,24 @@ export const getMyExitPermissions = async (studentIds: string[]) => { if (studen
 export const completeExitPermission = async (id: string) => { const { error } = await supabase.from('exit_permissions').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', id); if (error) throw new Error(error.message); };
 
 export const getAvailableSlots = async (date?: string) => { let query = supabase.from('appointment_slots').select('*'); if (date) query = query.eq('date', date); else { const today = new Date().toISOString().split('T')[0]; query = query.gte('date', today); } const { data, error } = await query.order('date', { ascending: true }).order('start_time', { ascending: true }); if (error) return []; return data.map((s: any) => ({ id: s.id, date: s.date, startTime: s.start_time, endTime: s.end_time, maxCapacity: s.max_capacity, currentBookings: s.current_bookings })); };
-export const generateDefaultAppointmentSlots = async (date: string) => { const slots = []; const startHour = 7; const startMinute = 30; const endHour = 12; let current = new Date(`${date}T${startHour.toString().padStart(2,'0')}:${startMinute.toString().padStart(2,'0')}:00`); const end = new Date(`${date}T${endHour.toString().padStart(2,'0')}:00:00`); while (current < end) { const startTime = current.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}); current.setMinutes(current.getMinutes() + 30); const endTime = current.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}); slots.push({ date: date, start_time: startTime, end_time: endTime, max_capacity: 5, current_bookings: 0 }); } const { error } = await supabase.from('appointment_slots').insert(slots); if (error) throw new Error(error.message); };
+export const generateDefaultAppointmentSlots = async (date: string) => { 
+    const slots = []; 
+    // Updated Logic: 8:00 AM to 11:00 AM, 30 min intervals, Capacity 3
+    const startHour = 8; 
+    const startMinute = 0; 
+    const endHour = 11; 
+    let current = new Date(`${date}T${startHour.toString().padStart(2,'0')}:${startMinute.toString().padStart(2,'0')}:00`); 
+    const end = new Date(`${date}T${endHour.toString().padStart(2,'0')}:00:00`); 
+    
+    while (current < end) { 
+        const startTime = current.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}); 
+        current.setMinutes(current.getMinutes() + 30); 
+        const endTime = current.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}); 
+        slots.push({ date: date, start_time: startTime, end_time: endTime, max_capacity: 3, current_bookings: 0 }); 
+    } 
+    const { error } = await supabase.from('appointment_slots').insert(slots); 
+    if (error) throw new Error(error.message); 
+};
 export const addAppointmentSlot = async (slot: Omit<AppointmentSlot, 'id' | 'currentBookings'>) => { const { error } = await supabase.from('appointment_slots').insert({ date: slot.date, start_time: slot.startTime, end_time: slot.endTime, max_capacity: slot.maxCapacity }); if (error) throw new Error(error.message); };
 export const updateAppointmentSlot = async (slot: AppointmentSlot) => { const { error } = await supabase.from('appointment_slots').update({ start_time: slot.startTime, end_time: slot.endTime, max_capacity: slot.maxCapacity }).eq('id', slot.id); if (error) throw new Error(error.message); };
 export const deleteAppointmentSlot = async (id: string) => { const { error } = await supabase.from('appointment_slots').delete().eq('id', id); if (error) throw new Error(error.message); };

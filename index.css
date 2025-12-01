@@ -36,6 +36,14 @@ select option {
 .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
 .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
 
+/* Floating Dock Animation */
+.floating-dock button {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.floating-dock button:hover {
+  transform: translateY(-10px) scale(1.1);
+}
+
 /* ========================================= */
 /* PRINT STYLES - OFFICIAL MOE TEMPLATE      */
 /* ========================================= */
@@ -43,40 +51,44 @@ select option {
 @media print {
   @page {
     size: A4;
-    margin: 4mm; /* Strict 4mm margin */
+    margin: 5mm; /* Strict margins */
   }
 
-  body {
-    background-color: white;
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    background-color: white !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
     margin: 0;
     padding: 0;
+    font-size: 12pt;
   }
 
   /* Hide UI elements */
-  .no-print, nav, header, footer, button, .sidebar, .floating-dock {
+  .no-print, nav, header, footer, button, .sidebar, .floating-dock, .admin-header, .custom-scrollbar::-webkit-scrollbar {
     display: none !important;
   }
 
   /* Specific Print Container Logic */
-  #print-container {
+  #print-container, .printable-area {
     display: block !important;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     background: white;
     z-index: 9999;
-    font-size: 12pt;
     color: black;
+    padding: 10mm;
   }
 
-  /* Watermark Logic */
+  /* Watermark Logic - Ministry Logo */
   .print-page-a4 {
     position: relative;
-    width: 210mm;
-    min-height: 290mm; /* A4 Height minus margins approx */
-    margin: 0 auto;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
   }
 
@@ -85,30 +97,32 @@ select option {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 60%;
-    opacity: 0.05; /* Very subtle watermark */
+    width: 50%;
+    opacity: 0.04; /* Very subtle */
     z-index: 0;
     pointer-events: none;
+    filter: grayscale(100%);
   }
 
-  /* Header Layout */
+  /* Official Header Layout */
   .print-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     border-bottom: 2px solid #000;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+    padding-bottom: 15px;
+    margin-bottom: 30px;
     position: relative;
     z-index: 1;
+    width: 100%;
   }
 
   .print-header-right, .print-header-left {
     text-align: center;
     font-weight: bold;
     font-size: 10pt;
-    line-height: 1.4;
-    width: 30%;
+    line-height: 1.6;
+    width: 35%;
   }
 
   .print-header-center {
@@ -116,105 +130,104 @@ select option {
     display: flex;
     justify-content: center;
     align-items: center;
+    padding-top: 5px;
   }
 
   .print-logo {
-    max-height: 80px; /* Adjusted for better fit */
+    max-height: 90px;
     width: auto;
   }
 
-  /* Table Styles for Print */
-  .print-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    font-size: 10pt;
-    position: relative;
-    z-index: 1;
-  }
-
-  .print-table th, .print-table td {
-    border: 1px solid #000;
-    padding: 6px;
+  /* Official Title */
+  .official-title {
     text-align: center;
+    font-size: 18pt;
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 8px;
+    margin-bottom: 30px;
+    margin-top: 10px;
   }
 
-  .print-table th {
-    background-color: #f0f0f0 !important;
-    font-weight: bold;
-  }
-
+  /* Signature Section */
   .footer-signatures {
-    margin-top: 40px;
+    margin-top: 60px;
     display: flex;
     justify-content: space-between;
     page-break-inside: avoid;
     position: relative;
     z-index: 1;
-    padding: 0 40px;
+    width: 100%;
+    padding: 0 20px;
+  }
+  
+  .signature-box {
+    text-align: center;
+    width: 200px;
+  }
+  
+  .signature-title {
+    font-weight: bold;
+    margin-bottom: 40px;
+    font-size: 12pt;
   }
 
-  /* Certificate Specific - Enhanced for Digital Look */
+  /* Certificate Styles */
   .certificate-border {
-    border: 10px solid #1e3a8a;
-    outline: 2px solid #d97706;
-    outline-offset: -15px;
-    padding: 30px;
-    height: 98%;
+    border: 10px double #1e3a8a; /* Blue double border */
+    padding: 20px;
+    height: 95%;
     position: relative;
-    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(248,250,252,1) 100%);
+    background: white;
   }
   
   .certificate-corner {
     position: absolute;
     width: 60px;
     height: 60px;
-    border: 4px double #d97706; /* Amber double */
-    z-index: 2;
+    border: 4px solid #b45309; /* Amber/Gold */
   }
-  .corner-tl { top: 15px; left: 15px; border-right: none; border-bottom: none; }
-  .corner-tr { top: 15px; right: 15px; border-left: none; border-bottom: none; }
-  .corner-bl { bottom: 15px; left: 15px; border-right: none; border-top: none; }
-  .corner-br { bottom: 15px; right: 15px; border-left: none; border-top: none; }
+  
+  .corner-tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+  .corner-tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+  .corner-bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+  .corner-br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
 
   .certificate-title {
-    font-family: 'Amiri', 'Cairo', serif;
-    text-shadow: 1px 1px 0px #cbd5e1;
+    font-family: 'Amiri', serif; /* Or any fancy font if available */
+    color: #1e3a8a;
+    text-shadow: 1px 1px 0 #000;
   }
 
   /* Referral Report Specifics */
   .referral-box {
     border: 1px solid #000;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 20px;
+    padding: 10px;
+    margin-bottom: 15px;
     position: relative;
     background-color: #fff;
   }
   
   .referral-box-title {
-    position: absolute;
-    top: -12px;
-    right: 20px;
-    background: white;
-    padding: 0 10px;
+    background: #e5e5e5 !important;
+    padding: 5px 10px;
     font-weight: bold;
     font-size: 11pt;
-    border: 1px solid #000;
-    border-radius: 5px;
+    border-bottom: 1px solid #000;
+    margin: -10px -10px 10px -10px;
+    display: block;
+    -webkit-print-color-adjust: exact;
   }
 
   .referral-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 10px;
   }
   
   .referral-row {
-    margin-bottom: 8px;
-    border-bottom: 1px dotted #ccc;
     padding-bottom: 4px;
+    font-size: 11pt;
   }
   
   .referral-label {

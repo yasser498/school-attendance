@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2, Lock, X } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Copy, Check, Info, Sparkles, AlertTriangle, Loader2, Lock, CalendarDays, X } from 'lucide-react';
 import { getStudents, addRequest, uploadFile } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
 import { GRADES } from '../constants';
@@ -25,7 +26,12 @@ const Submission: React.FC = () => {
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [reason, setReason] = useState('');
   const [details, setDetails] = useState('');
-  const [date, setDate] = useState('');
+  
+  // Date Logic
+  const [isMultiDay, setIsMultiDay] = useState(false);
+  const [date, setDate] = useState(''); // Start Date
+  const [endDate, setEndDate] = useState(''); // End Date
+
   const [file, setFile] = useState<File | null>(null);
 
   // Data
@@ -81,6 +87,7 @@ const Submission: React.FC = () => {
     if (urlDate) {
       setDate(urlDate);
       setIsDateLocked(true); // Lock the date field
+      setIsMultiDay(false); // Disable multi-day if specific date requested
     }
   }, [searchParams, students, dataLoading]);
 
@@ -96,34 +103,73 @@ const Submission: React.FC = () => {
     }
   };
 
+  const getDatesInRange = (startDateStr: string, endDateStr: string) => {
+      const dates = [];
+      const current = new Date(startDateStr);
+      const end = new Date(endDateStr);
+      
+      // Safety break to prevent infinite loops (max 30 days)
+      let count = 0;
+      while (current <= end && count < 30) {
+          const day = current.getDay();
+          // 5 = Friday, 6 = Saturday (Skip weekends)
+          if (day !== 5 && day !== 6) {
+              dates.push(new Date(current).toISOString().split('T')[0]);
+          }
+          current.setDate(current.getDate() + 1);
+          count++;
+      }
+      return dates;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudentId || !reason || !date || !file) return;
-
-    // Strict Validation
-    const selectedDateObj = new Date(date);
-    const day = selectedDateObj.getDay(); 
     
-    // Check if weekend (Friday=5, Saturday=6)
-    if (day === 5 || day === 6) {
-        alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
+    // Validation
+    if (!selectedStudentId || !reason || !date || !file) return;
+    if (isMultiDay && !endDate) {
+        alert("يرجى تحديد تاريخ نهاية الغياب.");
+        return;
+    }
+    if (isMultiDay && new Date(endDate) < new Date(date)) {
+        alert("تاريخ النهاية يجب أن يكون بعد تاريخ البداية.");
         return;
     }
 
+    // Determine list of dates to submit
+    let datesToSubmit: string[] = [];
+    if (isMultiDay) {
+        datesToSubmit = getDatesInRange(date, endDate);
+        if (datesToSubmit.length === 0) {
+            alert("الفترة المحددة لا تحتوي على أيام دراسية (عطلة نهاية أسبوع).");
+            return;
+        }
+    } else {
+        // Single Day Check
+        const selectedDateObj = new Date(date);
+        const day = selectedDateObj.getDay(); 
+        if (day === 5 || day === 6) {
+            alert("لا يمكن تقديم عذر في أيام الجمعة أو السبت (عطلة رسمية).");
+            return;
+        }
+        datesToSubmit = [date];
+    }
+
+    // Date Range Validity Check (Past 7 days rule)
     const today = new Date();
     today.setHours(0,0,0,0);
-    selectedDateObj.setHours(0,0,0,0);
-
-    const diffTime = today.getTime() - selectedDateObj.getTime();
+    const startObj = new Date(date);
+    startObj.setHours(0,0,0,0);
+    
+    const diffTime = today.getTime() - startObj.getTime();
     const diffDays = diffTime / (1000 * 3600 * 24);
 
-    if (selectedDateObj > today) {
+    if (startObj > today) {
         alert("لا يمكن اختيار تاريخ مستقبلي.");
         return;
     }
 
     // Allow older dates IF it was pre-filled (locked) via the system alert
-    // Otherwise, enforce the 7-day rule
     if (!isDateLocked && diffDays > 7) {
         alert("عفواً، لا يمكن تقديم عذر لغياب مضى عليه أكثر من 7 أيام.");
         return;
@@ -134,6 +180,7 @@ const Submission: React.FC = () => {
     try {
       const student = students.find(s => s.id === selectedStudentId);
       if (student) {
+        // Upload ONE file for all requests
         const attachmentUrl = await uploadFile(file);
 
         if (!attachmentUrl) {
@@ -142,21 +189,26 @@ const Submission: React.FC = () => {
             return;
         }
 
-        const newRequest: ExcuseRequest = {
-          id: '', 
-          studentId: student.studentId,
-          studentName: student.name,
-          grade: student.grade,
-          className: student.className,
-          date,
-          reason,
-          details,
-          attachmentName: file.name,
-          attachmentUrl: attachmentUrl, 
-          status: RequestStatus.PENDING,
-          submissionDate: new Date().toISOString(),
-        };
-        await addRequest(newRequest);
+        // Loop through dates and create a request for each day
+        // This ensures the database stays clean and "Daily Reports" work correctly without modification
+        for (const d of datesToSubmit) {
+            const newRequest: ExcuseRequest = {
+              id: '', 
+              studentId: student.studentId,
+              studentName: student.name,
+              grade: student.grade,
+              className: student.className,
+              date: d,
+              reason,
+              details: isMultiDay ? `${details} (عذر متصل من ${date} إلى ${endDate})` : details,
+              attachmentName: file.name,
+              attachmentUrl: attachmentUrl, 
+              status: RequestStatus.PENDING,
+              submissionDate: new Date().toISOString(),
+            };
+            await addRequest(newRequest);
+        }
+        
         setStep(2); 
       }
     } catch (e) {
@@ -182,13 +234,14 @@ const Submission: React.FC = () => {
     setSelectedClass('');
     setSelectedStudentId('');
     setDate('');
+    setEndDate('');
+    setIsMultiDay(false);
   };
 
   const today = new Date();
   const maxDate = today.toISOString().split('T')[0];
-  // Calculate min date only if not locked (if locked, we accept whatever the system passed)
   const minDateObj = new Date();
-  minDateObj.setDate(today.getDate() - 30); // Allow system to pass older dates, UI restricts picker
+  minDateObj.setDate(today.getDate() - 30); 
   const minDate = minDateObj.toISOString().split('T')[0];
 
   const inputClasses = "w-full p-3.5 md:p-3 bg-white border border-slate-300 text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-blue-900 outline-none transition-all shadow-sm placeholder:text-slate-400 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed";
@@ -212,6 +265,7 @@ const Submission: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">تم إرسال الطلب بنجاح</h2>
           <p className="text-slate-500">سيتم مراجعة العذر من قبل إدارة متوسطة عماد الدين زنكي وإشعاركم بالحالة.</p>
+          {isMultiDay && <p className="text-xs text-blue-600 font-bold mt-2 bg-blue-50 py-1 px-2 rounded-lg inline-block">تم تسجيل طلب منفصل لكل يوم في الفترة المحددة</p>}
         </div>
         <div className="pt-6 space-y-3">
           <button 
@@ -325,68 +379,78 @@ const Submission: React.FC = () => {
             )}
           </div>
 
-          {/* Student ID Info Alert */}
-          {selectedStudent && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between shadow-sm relative overflow-hidden gap-4">
-                <div className="absolute right-0 top-0 w-1 h-full bg-blue-900"></div>
-                <div className="flex items-center gap-4 md:gap-5">
-                  <div className="bg-white p-3 rounded-full text-blue-900 shadow-sm border border-blue-100 shrink-0">
-                    <Info size={24} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-blue-800 font-bold mb-1 opacity-80">رقم الطالب (السجل المدني)</p>
-                    <p className="text-xl md:text-2xl font-bold text-slate-900 font-mono tracking-wider">{selectedStudent.studentId}</p>
-                  </div>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => copyToClipboard(selectedStudent.studentId)}
-                  className={`w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 md:py-2.5 rounded-lg transition-all font-bold text-sm shadow-sm
-                    ${copied 
-                      ? 'bg-emerald-600 text-white border border-emerald-600' 
-                      : 'bg-white text-blue-900 border border-blue-200 hover:bg-blue-50'
-                    }`}
-                  title="نسخ الرقم"
-                >
-                  {copied ? (
-                    <>
-                      <Check size={18} />
-                      <span>تم النسخ</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={18} />
-                      <span>نسخ</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Removed Student ID Info Alert per request */}
 
           <div className="border-t border-slate-100 pt-2"></div>
 
+          {/* Date & Range Logic */}
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <CalendarDays size={18} className="text-blue-600"/>
+                      فترة الغياب
+                  </label>
+                  {!isDateLocked && (
+                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                          <input 
+                              type="checkbox" 
+                              id="multiDay" 
+                              checked={isMultiDay} 
+                              onChange={(e) => { setIsMultiDay(e.target.checked); if(!e.target.checked) setEndDate(''); }}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                          />
+                          <label htmlFor="multiDay" className="text-xs font-bold text-slate-600 cursor-pointer select-none">في حال كان الغياب اكثر من يوم متصل؟</label>
+                      </div>
+                  )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                      <label className="text-xs text-slate-500 font-bold block mb-1">
+                          {isMultiDay ? 'تاريخ البداية (من)' : 'تاريخ الغياب'} {isDateLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}
+                      </label>
+                      <input 
+                          type="date" 
+                          required
+                          min={minDate}
+                          max={maxDate}
+                          value={date}
+                          disabled={isDateLocked}
+                          onChange={(e) => setDate(e.target.value)}
+                          className={inputClasses}
+                      />
+                  </div>
+                  
+                  {isMultiDay && (
+                      <div className="animate-fade-in">
+                          <label className="text-xs text-slate-500 font-bold block mb-1">تاريخ النهاية (إلى)</label>
+                          <input 
+                              type="date" 
+                              required={isMultiDay}
+                              min={date} // Cannot end before start
+                              max={maxDate}
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              className={inputClasses}
+                          />
+                      </div>
+                  )}
+              </div>
+              
+              {!isDateLocked && !isMultiDay && (
+                  <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
+                      <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
+                  </p>
+              )}
+              {isMultiDay && (
+                  <p className="text-xs text-blue-600 mt-2 font-medium flex items-center gap-1 animate-fade-in">
+                      <Info size={12}/> سيتم تسجيل طلب منفصل لكل يوم دراسي في الفترة المحددة.
+                  </p>
+              )}
+          </div>
+
           {/* Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-             <div>
-              <label className={labelClasses}>تاريخ الغياب {isDateLocked && <Lock size={12} className="inline ml-1 text-slate-400"/>}</label>
-              <input 
-                type="date" 
-                required
-                min={minDate}
-                max={maxDate}
-                value={date}
-                disabled={isDateLocked}
-                onChange={(e) => setDate(e.target.value)}
-                className={inputClasses}
-              />
-              {!isDateLocked && (
-                <p className="text-xs text-amber-600 mt-2 font-medium flex items-center gap-1">
-                    <AlertCircle size={12}/> مسموح آخر 7 أيام فقط (الجمعة/السبت غير مسموح)
-                </p>
-              )}
-            </div>
              <div>
               <label className={labelClasses}>سبب الغياب</label>
               <select 
@@ -403,17 +467,16 @@ const Submission: React.FC = () => {
                 <option value="أخرى">أخرى</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className={labelClasses}>تفاصيل إضافية (اختياري)</label>
-            <textarea 
-              rows={4}
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              className={inputClasses}
-              placeholder="اكتب أي تفاصيل إضافية توضح سبب الغياب..."
-            ></textarea>
+            <div>
+                <label className={labelClasses}>تفاصيل إضافية (اختياري)</label>
+                <input 
+                  type="text"
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value)}
+                  className={inputClasses}
+                  placeholder="مثال: ارتفاع في درجة الحرارة..."
+                />
+            </div>
           </div>
 
           {/* File Upload */}
@@ -459,7 +522,7 @@ const Submission: React.FC = () => {
               ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 hover:shadow-xl hover:-translate-y-1'}
             `}
           >
-            {loading ? 'جاري الإرسال...' : 'إرسال الطلب رسمياً'}
+            {loading ? 'جاري الإرسال...' : isMultiDay ? 'إرسال الطلبات للفترة المحددة' : 'إرسال الطلب رسمياً'}
           </button>
 
         </form>

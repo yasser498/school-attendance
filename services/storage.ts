@@ -137,13 +137,21 @@ export const suggestBehaviorAction = async (violationName: string, historyCount:
 };
 
 export const generateGuidancePlan = async (studentName: string, history: any) => {
+    const counselorName = await getCounselorName();
     const prompt = `
-    اكتب مسودة "خطة علاجية فردية" للطالب ${studentName}.
-    المشاكل المرصودة: ${history}.
+    بصفتك خبيراً تربوياً، قم بإعداد "خطة علاجية فردية" رسمية وجاهزة للطباعة للطالب: ${studentName}.
+    
+    سياق الحالة والملاحظات: ${history}.
+    
     المطلوب:
-    1. تشخيص مبدئي للمشكلة.
-    2. هدف الجلسة الإرشادية القادمة.
-    3. خطوتان عمليتان لتعديل السلوك.
+    اكتب الخطة مباشرة بصيغة رسمية (بدون مقدمات مثل "إليك المسودة").
+    الهيكل المطلوب:
+    1. التشخيص التربوي (صياغة مهنية للمشكلة).
+    2. الأهداف السلوكية (ما نريد تحقيقه).
+    3. الإجراءات العلاجية (خطوات عملية محددة للمعلم وولي الأمر والطالب).
+    4. التوصيات الختامية.
+
+    استخدم لغة عربية فصحى رسمية جداً، بصيغة المتكلم (الموجه الطلابي).
     `;
     return await generateSmartContent(prompt);
 };
@@ -467,9 +475,10 @@ export const updateBehaviorRecord = async (record: BehaviorRecord) => { const { 
 export const deleteBehaviorRecord = async (id: string) => { const { error } = await supabase.from('behaviors').delete().eq('id', id); if (error) throw new Error(error.message); };
 export const acknowledgeBehavior = async (id: string, feedback: string) => { await supabase.from('behaviors').update({ parent_viewed: true, parent_feedback: feedback, parent_viewed_at: new Date().toISOString() }).eq('id', id); };
 export const clearBehaviorRecords = async () => { await supabase.from('behaviors').delete().neq('id', '0'); };
-export const getStudentObservations = async (studentId?: string) => {
+export const getStudentObservations = async (studentId?: string, type?: string) => {
     let query = supabase.from('observations').select('*');
     if (studentId) query = query.eq('student_id', studentId);
+    if (type) query = query.eq('type', type);
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) return [];
     return data.map(mapObservationFromDB);
@@ -511,6 +520,8 @@ export const updateReferralStatus = async (id: string, status: string, outcome?:
 };
 export const clearReferrals = async () => { await supabase.from('referrals').delete().neq('id', '0'); };
 export const addGuidanceSession = async (session: GuidanceSession) => { const { error } = await supabase.from('guidance_sessions').insert(mapSessionToDB(session)); if (error) throw new Error(error.message); };
+export const updateGuidanceSession = async (session: GuidanceSession) => { const { error } = await supabase.from('guidance_sessions').update(mapSessionToDB(session)).eq('id', session.id); if (error) throw new Error(error.message); };
+export const deleteGuidanceSession = async (id: string) => { const { error } = await supabase.from('guidance_sessions').delete().eq('id', id); if (error) throw new Error(error.message); };
 export const getGuidanceSessions = async () => { const { data, error } = await supabase.from('guidance_sessions').select('*').order('date', { ascending: false }); if (error) return []; return data.map(mapSessionFromDB); };
 
 export const saveBotContext = async (content: string) => {

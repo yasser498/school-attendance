@@ -62,6 +62,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
 
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
+  // Logic to show ChatBot only on main screens
+  const showChatBot = ['/', '/staff/home', '/admin/dashboard'].includes(location.pathname);
+
   const NavItem = ({ to, icon: Icon, label, badge, activeColor = 'blue' }: { to: string, icon: any, label: string, badge?: number, activeColor?: string }) => (
     <Link 
       to={to} 
@@ -274,8 +277,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
         </div>
       </main>
 
-      {/* Chat Bot Widget */}
-      <ChatBot />
+      {/* Chat Bot Widget - Only on Main Screens */}
+      {showChatBot && <ChatBot />}
 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (

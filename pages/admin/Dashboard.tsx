@@ -1,9 +1,10 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { 
   FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit, 
-  Search, Settings, Printer, BarChart2, Users, Trash2, ShieldAlert, Send, Megaphone, Activity, LayoutGrid, RefreshCw, Plus, UserCheck, CalendarCheck, Edit, GitCommit, List, Save, AlertCircle, Eye, ArrowRight, Gavel, Check, School, LogOut, MessageSquare
+  Search, Settings, Printer, BarChart2, Users, Trash2, ShieldAlert, Send, Megaphone, Activity, LayoutGrid, RefreshCw, Plus, UserCheck, CalendarCheck, Edit, GitCommit, List, Save, AlertCircle, Eye, ArrowRight, Gavel, Check, School, LogOut, MessageSquare, Bell, Upload, BookOpen
 } from 'lucide-react';
 import { 
   getRequests, getStudents, getConsecutiveAbsences, resolveAbsenceAlert, getBehaviorRecords, 
@@ -11,8 +12,10 @@ import {
   clearAttendance, clearRequests, clearStudents, clearBehaviorRecords, clearAdminInsights, 
   clearReferrals, getSchoolNews, updateSchoolNews, addSchoolNews, deleteSchoolNews,
   getAvailableSlots, addAppointmentSlot, deleteAppointmentSlot, getDailyAppointments, getStaffUsers,
-  getBotContext, getExitPermissions, generateDefaultAppointmentSlots, updateAppointmentSlot,
-  getStudentObservations, getReferrals, updateReferralStatus, getAdminInsights
+  getBotContext, saveBotContext, getExitPermissions, generateDefaultAppointmentSlots, updateAppointmentSlot,
+  getStudentObservations, getReferrals, updateReferralStatus, getAdminInsights,
+  sendBatchNotifications, generateTeacherAbsenceSummary, sendPendingReferralReminders,
+  extractTextFromFile, getAllParentIds
 } from '../../services/storage';
 import { ExcuseRequest, Student, BehaviorRecord, AttendanceRecord, SchoolNews, Appointment, AppointmentSlot, StaffUser, ExitPermission, StudentObservation, Referral, AdminInsight } from '../../types';
 
@@ -22,7 +25,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   
   // Navigation & View State
-  const [activeView, setActiveView] = useState<'overview' | 'tracking' | 'behavior' | 'appointments' | 'directives' | 'news' | 'settings'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'tracking' | 'behavior' | 'appointments' | 'directives' | 'news' | 'notifications' | 'settings'>('overview');
   
   // Core Data
   const [requests, setRequests] = useState<ExcuseRequest[]>([]);
@@ -32,11 +35,12 @@ const Dashboard: React.FC = () => {
   const [observations, setObservations] = useState<StudentObservation[]>([]); 
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [todaysExits, setTodaysExits] = useState<ExitPermission[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   
   const [dataLoading, setDataLoading] = useState(true);
   
   // School Identity
-  const [schoolName, setSchoolName] = useState(localStorage.getItem('school_name') || 'متوسطة عماد الدين زنكي');
+  const [schoolName, setSchoolName] = useState(localStorage.getItem('school_name') || 'مدرسة عماد الدين زنكي المتوسطة');
   const [schoolLogo, setSchoolLogo] = useState(localStorage.getItem('school_logo') || 'https://www.raed.net/img?id=1471924');
   
   // Alerts & AI
@@ -44,10 +48,13 @@ const Dashboard: React.FC = () => {
   const [aiBriefing, setAiBriefing] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Settings
+  // Settings & Bot Context
   const [tempSchoolName, setTempSchoolName] = useState(schoolName);
   const [tempSchoolLogo, setTempSchoolLogo] = useState(schoolLogo);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [botContext, setBotContext] = useState('');
+  const [isSavingContext, setIsSavingContext] = useState(false);
+  const [fileProcessing, setFileProcessing] = useState(false);
 
   // Tracking
   const [trackingFilter, setTrackingFilter] = useState<'all' | 'pending' | 'resolved'>('all');
@@ -70,38 +77,63 @@ const Dashboard: React.FC = () => {
   const [sentDirectives, setSentDirectives] = useState<AdminInsight[]>([]);
   const [isSendingDirective, setIsSendingDirective] = useState(false);
 
+  // Notifications Logic
+  const [notifTargetGroup, setNotifTargetGroup] = useState<'global' | 'all_staff' | 'teachers' | 'admins'>('all_staff');
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMessage, setNotifMessage] = useState('');
+  const [isSendingNotif, setIsSendingNotif] = useState(false);
+  const [isTriggeringSmart, setIsTriggeringSmart] = useState(false);
+
   // Global Search
   const [globalSearch, setGlobalSearch] = useState('');
 
   const fetchData = async () => {
       setDataLoading(true);
       try {
-        const [reqs, studs, behaviors, atts, news, apps, obs, refs, risks, slts, exits, dirs] = await Promise.all([
-            getRequests(), 
-            getStudents(), 
-            getBehaviorRecords(),
-            getAttendanceRecords(),
-            getSchoolNews(),
+        // --- PHASE 1: VITAL DATA (Today's Stats) ---
+        // Fetch only records for TODAY to prevent timeout
+        const [todayAtt, todayBehaviors, todayExits, todayApps, todaySlots, reqs] = await Promise.all([
+            getAttendanceRecords(apptDate),
+            getBehaviorRecords(undefined, apptDate),
+            getExitPermissions(apptDate),
             getDailyAppointments(apptDate),
-            getStudentObservations(),
+            getAvailableSlots(apptDate),
+            getRequests()
+        ]);
+
+        setAttendanceRecords(todayAtt);
+        setBehaviorRecords(todayBehaviors);
+        setTodaysExits(todayExits);
+        setAppointmentsList(todayApps);
+        setSlots(todaySlots);
+        setRequests(reqs);
+
+        // --- PHASE 2: SECONDARY DATA (Can load slightly later) ---
+        // These might still be heavy but are less critical for immediate display
+        const [studs, news, users, context] = await Promise.all([
+            getStudents(),
+            getSchoolNews(),
+            getStaffUsers(),
+            getBotContext()
+        ]);
+        
+        setStudents(studs);
+        setNewsList(news);
+        setStaffUsers(users);
+        setBotContext(context);
+
+        // --- PHASE 3: BACKGROUND DATA ---
+        // These are fetched separately to avoid blocking the UI if they take long
+        Promise.all([
             getReferrals(),
             getConsecutiveAbsences(),
-            getAvailableSlots(apptDate),
-            getExitPermissions(apptDate),
-            getAdminInsights()
-        ]);
-        setRequests(reqs);
-        setStudents(studs);
-        setBehaviorRecords(behaviors);
-        setAttendanceRecords(atts);
-        setNewsList(news);
-        setAppointmentsList(apps);
-        setObservations(obs);
-        setReferrals(refs);
-        setAlerts(risks);
-        setSlots(slts);
-        setTodaysExits(exits);
-        setSentDirectives(dirs);
+            getAdminInsights(),
+            // getStudentObservations() // Optional, might be heavy
+        ]).then(([refs, risks, dirs]) => {
+            setReferrals(refs);
+            setAlerts(risks);
+            setSentDirectives(dirs);
+        }).catch(e => console.warn("Background fetch warning:", e));
 
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
@@ -124,7 +156,7 @@ const Dashboard: React.FC = () => {
       }));
 
       const todayViolations = behaviorRecords.filter(r => r.date === todayStr).length;
-      const todayExits = todaysExits.length;
+      const todayExitsCount = todaysExits.length;
       const todayVisits = appointmentsList.filter(a => a.status === 'completed').length;
 
       return { 
@@ -133,7 +165,7 @@ const Dashboard: React.FC = () => {
           studentsCount: students.length, 
           present, absent, late,
           todayViolations,
-          todayExits,
+          todayExits: todayExitsCount,
           todayVisits
       }; 
   }, [requests, students, attendanceRecords, behaviorRecords, todaysExits, appointmentsList, apptDate]);
@@ -146,6 +178,50 @@ const Dashboard: React.FC = () => {
       setSchoolLogo(tempSchoolLogo);
       alert("تم حفظ الإعدادات بنجاح! سيتم تحديث النظام.");
       window.location.reload();
+  };
+
+  const handleSaveBotContext = async () => {
+      setIsSavingContext(true);
+      try {
+          await saveBotContext(botContext);
+          alert("تم تحديث قاعدة المعرفة بنجاح.");
+      } catch(e) {
+          alert("حدث خطأ أثناء الحفظ.");
+      } finally {
+          setIsSavingContext(false);
+      }
+  };
+
+  const handleFileFeed = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+          alert("حجم الملف كبير جداً. الحد الأقصى 10 ميجابايت.");
+          return;
+      }
+
+      setFileProcessing(true);
+      try {
+          // Use the new helper function in storage.ts
+          const extractedText = await extractTextFromFile(file);
+          
+          if (!extractedText || extractedText.length < 5) {
+              alert("لم يتم العثور على نص واضح في الملف.");
+          } else {
+              setBotContext(prev => {
+                  const header = `\n\n--- محتوى مستخرج من ملف: ${file.name} ---\n`;
+                  return prev + header + extractedText;
+              });
+              alert("تم استخراج النص وإضافته إلى المحرر. يرجى المراجعة ثم الحفظ.");
+          }
+      } catch (error: any) {
+          console.error(error);
+          alert(`فشل تحليل الملف: ${error.message}`);
+      } finally {
+          setFileProcessing(false);
+          e.target.value = ''; // Reset input
+      }
   };
 
   const handleClearData = async (target: 'requests'|'attendance'|'behavior'|'students'|'referrals'|'all') => {
@@ -251,6 +327,66 @@ const Dashboard: React.FC = () => {
       } catch(e) { alert("فشل التحسين"); }
   };
 
+  // --- NOTIFICATIONS HANDLERS ---
+  const handleSendCustomNotification = async () => {
+      if (!notifTitle || !notifMessage) {
+          alert("يرجى تعبئة العنوان والرسالة.");
+          return;
+      }
+      setIsSendingNotif(true);
+      try {
+          let targetIds: string[] = [];
+          
+          if (notifTargetGroup === 'global') {
+              // 1. Get All Staff IDs
+              const staffIds = staffUsers.map(u => u.id);
+              // 2. Get All Parent IDs
+              const parentIds = await getAllParentIds();
+              // 3. Combine
+              targetIds = [...staffIds, ...parentIds];
+          } else if (notifTargetGroup === 'all_staff') {
+              targetIds = staffUsers.map(u => u.id);
+          } else if (notifTargetGroup === 'teachers') {
+              targetIds = staffUsers.filter(u => !u.permissions?.includes('students') && !u.permissions?.includes('deputy')).map(u => u.id);
+          } else if (notifTargetGroup === 'admins') {
+              targetIds = staffUsers.filter(u => u.permissions?.includes('students') || u.permissions?.includes('deputy')).map(u => u.id);
+          }
+
+          if (targetIds.length === 0) {
+              alert("لا يوجد مستخدمين في الفئة المستهدفة.");
+              return;
+          }
+
+          await sendBatchNotifications(targetIds, 'info', notifTitle, notifMessage);
+          
+          const targetLabel = notifTargetGroup === 'global' ? 'لجميع المستخدمين (أولياء أمور وموظفين)' : `لـ ${targetIds.length} مستخدم`;
+          alert(`تم إرسال الإشعار بنجاح ${targetLabel}.`);
+          
+          setNotifTitle(''); setNotifMessage('');
+      } catch (e) {
+          console.error(e);
+          alert("فشل الإرسال.");
+      } finally {
+          setIsSendingNotif(false);
+      }
+  };
+
+  const handleTriggerSummary = async () => {
+      setIsTriggeringSmart(true);
+      try {
+          const result = await generateTeacherAbsenceSummary();
+          alert(result.message);
+      } catch (e) { alert("حدث خطأ."); } finally { setIsTriggeringSmart(false); }
+  };
+
+  const handleTriggerReferralReminder = async () => {
+      setIsTriggeringSmart(true);
+      try {
+          const result = await sendPendingReferralReminders();
+          alert(result.message);
+      } catch (e) { alert("حدث خطأ."); } finally { setIsTriggeringSmart(false); }
+  };
+
   // --- RENDERERS ---
   const StatCard = ({ title, value, icon: Icon, color }: any) => (
       <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
@@ -289,6 +425,7 @@ const Dashboard: React.FC = () => {
               { id: 'tracking', label: 'الإحالات', icon: GitCommit },
               { id: 'appointments', label: 'المواعيد والأمن', icon: CalendarCheck },
               { id: 'directives', label: 'التوجيهات', icon: Megaphone },
+              { id: 'notifications', label: 'الإشعارات', icon: Bell },
               { id: 'news', label: 'المركز الإعلامي', icon: FileText },
               { id: 'settings', label: 'الإعدادات', icon: Settings },
           ].map(tab => (
@@ -464,6 +601,102 @@ const Dashboard: React.FC = () => {
           </div>
       )}
 
+      {/* === NEW: NOTIFICATIONS === */}
+      {activeView === 'notifications' && (
+          <div className="px-6 space-y-6 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Custom Message Composer */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                      <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Bell className="text-blue-600" /> إرسال إشعار فوري
+                      </h2>
+                      
+                      <div className="space-y-4">
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-2">الفئة المستهدفة</label>
+                              <div className="flex bg-slate-50 p-1 rounded-xl flex-wrap gap-1">
+                                  {[
+                                      {id: 'global', label: 'الجميع (عام)'},
+                                      {id: 'all_staff', label: 'جميع الموظفين'}, 
+                                      {id: 'teachers', label: 'المعلمين'}, 
+                                      {id: 'admins', label: 'الإداريين'}
+                                  ].map(opt => (
+                                      <button 
+                                          key={opt.id} 
+                                          onClick={() => setNotifTargetGroup(opt.id as any)}
+                                          className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${notifTargetGroup === opt.id ? 'bg-white shadow text-blue-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                      >
+                                          {opt.label}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">عنوان الإشعار</label>
+                              <input 
+                                  value={notifTitle} 
+                                  onChange={e => setNotifTitle(e.target.value)} 
+                                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-100" 
+                                  placeholder="مثال: اجتماع طارئ"
+                              />
+                          </div>
+
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">نص الرسالة</label>
+                              <textarea 
+                                  value={notifMessage} 
+                                  onChange={e => setNotifMessage(e.target.value)} 
+                                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-100" 
+                                  placeholder="اكتب الرسالة هنا..."
+                              ></textarea>
+                          </div>
+
+                          <button 
+                              onClick={handleSendCustomNotification} 
+                              disabled={isSendingNotif} 
+                              className="w-full bg-blue-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-800 transition-all shadow-lg"
+                          >
+                              {isSendingNotif ? <Loader2 className="animate-spin" /> : <Send size={18} />} إرسال الإشعار
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* Smart Triggers */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
+                      <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Sparkles className="text-purple-600" /> التنبيهات الذكية
+                      </h2>
+                      <div className="space-y-4 flex-1">
+                          <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                              <h3 className="font-bold text-indigo-900 mb-1 flex items-center gap-2"><UserCheck size={16}/> ملخص الغياب للمعلمين</h3>
+                              <p className="text-xs text-indigo-700 mb-3">يقوم النظام بتحليل غياب اليوم وإرسال رسالة لكل معلم بعدد الطلاب الغائبين في فصوله.</p>
+                              <button 
+                                  onClick={handleTriggerSummary}
+                                  disabled={isTriggeringSmart}
+                                  className="w-full bg-white text-indigo-700 border border-indigo-200 py-2 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
+                              >
+                                  {isTriggeringSmart ? 'جاري التنفيذ...' : 'تشغيل وإرسال الآن'}
+                              </button>
+                          </div>
+
+                          <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                              <h3 className="font-bold text-amber-900 mb-1 flex items-center gap-2"><AlertCircle size={16}/> تذكير بالإحالات المعلقة</h3>
+                              <p className="text-xs text-amber-700 mb-3">تنبيه الموجه الطلابي ووكيل الشؤون بوجود حالات تتطلب اتخاذ إجراء.</p>
+                              <button 
+                                  onClick={handleTriggerReferralReminder}
+                                  disabled={isTriggeringSmart}
+                                  className="w-full bg-white text-amber-700 border border-amber-200 py-2 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors"
+                              >
+                                  {isTriggeringSmart ? 'جاري التنفيذ...' : 'إرسال التذكير'}
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* === NEWS (MEDIA CENTER) === */}
       {activeView === 'news' && (
           <div className="px-6 space-y-6 animate-fade-in">
@@ -504,9 +737,10 @@ const Dashboard: React.FC = () => {
           </div>
       )}
 
-      {/* Reuse Settings Tab from previous logic (kept minimal for brevity as it was already implemented) */}
+      {/* === SETTINGS: SCHOOL INFO & BOT KNOWLEDGE BASE === */}
       {activeView === 'settings' && (
-          <div className="max-w-2xl mx-auto px-6 space-y-8 animate-fade-in">
+          <div className="max-w-4xl mx-auto px-6 space-y-8 animate-fade-in">
+              {/* School Basic Info */}
               <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
                   <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><School className="text-blue-600"/> إعدادات المدرسة</h2>
                   <div className="space-y-4">
@@ -515,6 +749,58 @@ const Dashboard: React.FC = () => {
                       <button onClick={handleSaveSettings} className="w-full bg-blue-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-800"><Save size={18}/> حفظ التغييرات</button>
                   </div>
               </div>
+
+              {/* Bot Knowledge Base (New Feature) */}
+              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-10 -mt-10"></div>
+                  <h2 className="text-xl font-bold text-indigo-900 mb-2 flex items-center gap-2 relative z-10">
+                      <BrainCircuit className="text-indigo-600"/> تغذية البوت (قاعدة المعرفة)
+                  </h2>
+                  <p className="text-sm text-slate-500 mb-6 relative z-10">
+                      أضف المعلومات العامة، اللوائح، أو الجداول الدراسية لتدريب المساعد الذكي. يمكنك الكتابة مباشرة أو رفع ملفات (PDF, Excel, Images).
+                  </p>
+
+                  <div className="space-y-4 relative z-10">
+                      {/* File Uploader */}
+                      <div className="border-2 border-dashed border-indigo-200 rounded-xl p-6 text-center hover:bg-indigo-50/50 transition-colors relative">
+                          <input 
+                              type="file" 
+                              accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png,.webp" 
+                              onChange={handleFileFeed} 
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              disabled={fileProcessing}
+                          />
+                          <div className="flex flex-col items-center gap-2 text-indigo-400">
+                              {fileProcessing ? <Loader2 size={32} className="animate-spin text-indigo-600"/> : <Upload size={32}/>}
+                              <p className="font-bold text-sm text-indigo-700">
+                                  {fileProcessing ? 'جاري تحليل الملف واستخراج النصوص...' : 'اضغط لرفع ملف (PDF, Excel, صورة)'}
+                              </p>
+                              <p className="text-xs opacity-70">سيتم استخراج النص وإضافته للمحرر أدناه للمراجعة</p>
+                          </div>
+                      </div>
+
+                      {/* Text Editor */}
+                      <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2"><BookOpen size={14}/> محتوى قاعدة المعرفة</label>
+                          <textarea 
+                              value={botContext} 
+                              onChange={e => setBotContext(e.target.value)} 
+                              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl min-h-[250px] outline-none focus:ring-2 focus:ring-indigo-200 font-mono text-sm leading-relaxed"
+                              placeholder="اكتب هنا معلومات عن المدرسة، أوقات الدوام، قوانين الغياب، إلخ..."
+                          ></textarea>
+                      </div>
+
+                      <button 
+                          onClick={handleSaveBotContext} 
+                          disabled={isSavingContext} 
+                          className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+                      >
+                          {isSavingContext ? <Loader2 className="animate-spin"/> : <Save size={18}/>} حفظ وتحديث البوت
+                      </button>
+                  </div>
+              </div>
+
+              {/* Danger Zone */}
               <div className="bg-red-50 p-8 rounded-3xl border border-red-100">
                   <h2 className="text-xl font-bold text-red-800 mb-6 flex items-center gap-2"><AlertTriangle className="text-red-600"/> منطقة الخطر</h2>
                   <button onClick={()=>handleClearData('all')} disabled={isDeleting} className="w-full bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200 flex items-center justify-center gap-2"><Trash2 size={20}/> تصفير النظام بالكامل</button>

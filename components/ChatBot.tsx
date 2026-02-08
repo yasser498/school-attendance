@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Loader2, Sparkles, Bot, User } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -58,7 +59,7 @@ const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const config = getAIConfig();
+      const config = await getAIConfig();
       if (!config.apiKey) {
         throw new Error("API Key missing");
       }
@@ -85,7 +86,7 @@ const ChatBot: React.FC = () => {
 
       // 3. Call Gemini
       const ai = new GoogleGenAI({ apiKey: config.apiKey });
-      const model = 'gemini-2.5-flash';
+      const model = config.model || 'gemini-3-pro-preview';
       
       const history = messages.map(m => ({
         role: m.role,
@@ -94,7 +95,10 @@ const ChatBot: React.FC = () => {
 
       const chat = ai.chats.create({
         model: model,
-        config: { systemInstruction },
+        config: { 
+            systemInstruction,
+            thinkingConfig: { thinkingBudget: 1024 } // Set reasoning budget
+        },
         history: history
       });
 
@@ -182,7 +186,7 @@ const ChatBot: React.FC = () => {
             <div className="flex justify-start">
               <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
                 <Sparkles size={16} className="text-purple-500 animate-pulse" />
-                <span className="text-xs text-slate-400 font-bold">جاري الكتابة...</span>
+                <span className="text-xs text-slate-400 font-bold">جاري الكتابة (التفكير بعمق)...</span>
               </div>
             </div>
           )}
@@ -209,7 +213,7 @@ const ChatBot: React.FC = () => {
             </button>
           </div>
           <p className="text-[9px] text-center text-slate-400 mt-2">
-            يعمل بالذكاء الاصطناعي ويجيب بناءً على صلاحياتك.
+            يعمل بوضع التفكير العميق (Thinking Mode) لإجابات أدق.
           </p>
         </div>
       </div>

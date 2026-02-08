@@ -46,6 +46,7 @@ const GateScanner: React.FC = () => {
   const scannerRef = useRef<any>(null);
   const isScannerRunning = useRef<boolean>(false);
   const isProcessingScan = useRef<boolean>(false);
+  const scannerLock = useRef<boolean>(false); // Mutex to prevent race conditions
 
   // Constants
   const REPORT_LOGO = "https://www.raed.net/img?id=1475049";
@@ -88,24 +89,65 @@ const GateScanner: React.FC = () => {
   }, [reportDate]);
 
   // --- Scanner Logic ---
-  const startScanner = async () => {
-      if (activeTab !== 'scanner') return;
-      if (isScannerRunning.current) return;
-
-      setScanError(null);
-      await new Promise(r => setTimeout(r, 100)); // DOM wait
-      
-      if (!document.getElementById('reader')) return;
+  const stopScanner = async () => {
+      if (scannerLock.current) return; // Wait if busy
+      scannerLock.current = true;
 
       try {
+          if (scannerRef.current) {
+              if (isScannerRunning.current) {
+                  try {
+                      await scannerRef.current.stop();
+                  } catch (e) {
+                      // Ignore "not running" errors
+                      console.debug("Stop ignored:", e);
+                  }
+              }
+              try {
+                  await scannerRef.current.clear();
+              } catch (e) {
+                  console.debug("Clear ignored:", e);
+              }
+          }
+      } catch (err) {
+          console.error("Failed to stop scanner completely", err);
+      } finally {
+          isScannerRunning.current = false;
+          scannerRef.current = null;
+          scannerLock.current = false;
+      }
+  };
+
+  const startScanner = async () => {
+      if (activeTab !== 'scanner') return;
+      if (scannerLock.current) return;
+      if (isScannerRunning.current) return;
+
+      scannerLock.current = true;
+      setScanError(null);
+
+      try {
+          // Cleanup old instance if needed
+          if (scannerRef.current) {
+              try { await scannerRef.current.stop(); } catch(e){}
+              try { await scannerRef.current.clear(); } catch(e){}
+              scannerRef.current = null;
+          }
+
+          // Delay for DOM
+          await new Promise(r => setTimeout(r, 100));
+          if (!document.getElementById('reader')) {
+              scannerLock.current = false;
+              return;
+          }
+
           const html5QrCode = new Html5Qrcode("reader");
           scannerRef.current = html5QrCode;
 
           const config = {
-              fps: 15, // Higher FPS for faster scanning
-              qrbox: { width: 280, height: 280 }, // Defined square scanning region
-              aspectRatio: 1.0,
-              focusMode: "continuous" 
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1.0
           };
 
           await html5QrCode.start(
@@ -116,39 +158,61 @@ const GateScanner: React.FC = () => {
                       handleScan(decodedText);
                   }
               },
-              (errorMessage: string) => { /* ignore */ }
+              (errorMessage: string) => { /* ignore frame errors */ }
           );
+          
           isScannerRunning.current = true;
+
       } catch (err: any) {
           console.error("Camera error:", err);
           let msg = "تعذر تشغيل الكاميرا.";
-          if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-                msg = "تم رفض إذن الكاميرا. يرجى السماح بالوصول من إعدادات المتصفح.";
+          const errStr = err?.toString() || '';
+          
+          if (
+              err?.name === "NotAllowedError" || 
+              err?.name === "PermissionDeniedError" || 
+              errStr.includes("Permission denied")
+          ) {
+                msg = "تم رفض إذن الكاميرا. يرجى الضغط على أيقونة القفل 🔒 في شريط العنوان والسماح بالوصول للكاميرا.";
+          } else if (err?.name === "NotFoundError" || errStr.includes("NotFoundError")) {
+                msg = "لم يتم العثور على كاميرا في الجهاز.";
+          } else if (err?.name === "NotReadableError" || errStr.includes("NotReadableError")) {
+                msg = "الكاميرا قيد الاستخدام بواسطة تطبيق آخر.";
+          } else if (errStr.includes("Is already running")) {
+                // Ignore if it claims running, just mark flag true
+                isScannerRunning.current = true;
+                msg = ""; // clear error
           }
-          setScanError(msg);
-          isScannerRunning.current = false;
+          
+          if (msg) setScanError(msg);
+          if (msg) isScannerRunning.current = false;
+      } finally {
+          scannerLock.current = false;
       }
   };
 
-  const stopScanner = async () => {
-      if (scannerRef.current && isScannerRunning.current) {
-          try {
-              await scannerRef.current.stop();
-              scannerRef.current.clear();
-              isScannerRunning.current = false;
-          } catch (err) {
-              console.error("Failed to stop scanner", err);
-          }
-      }
-  };
-
+  // Manage Scanner Lifecycle
   useEffect(() => {
-    if (activeTab === 'scanner') {
-        startScanner();
-    } else {
+    let ignore = false;
+
+    const init = async () => {
+        if (activeTab === 'scanner') {
+            // Give time for unmount/remount in React Strict Mode
+            await new Promise(r => setTimeout(r, 200));
+            if (!ignore) {
+                await startScanner();
+            }
+        } else {
+            await stopScanner();
+        }
+    };
+
+    init();
+
+    return () => {
+        ignore = true;
         stopScanner();
-    }
-    return () => { stopScanner(); };
+    };
   }, [activeTab]);
 
   const handleScan = async (decodedText: string) => {
@@ -170,10 +234,14 @@ const GateScanner: React.FC = () => {
 
           let foundExit = todaysExits.find(e => e.id === exitId);
           if (!foundExit) {
+              // Try fetching from DB if not in daily list (maybe old)
               const freshExit = await getExitPermissionById(exitId);
               if (freshExit) {
-                  foundExit = freshExit;
-                  setTodaysExits(prev => [...prev, freshExit]); 
+                  // Only consider it valid if it was created today OR is still pending
+                  const isToday = freshExit.createdAt.startsWith(new Date().toISOString().split('T')[0]);
+                  if (isToday || freshExit.status === 'pending_pickup') {
+                      foundExit = freshExit;
+                  }
               }
           }
 
@@ -183,12 +251,19 @@ const GateScanner: React.FC = () => {
                   setIsAlreadyProcessed(true);
               }
               setScanLoading(false);
-              return;
+              return; // Stop here if exit found
           }
 
           // 2. Visitor Appointment Check
           let visitId = decodedText;
-          const foundVisit = todaysVisits.find(v => v.id === visitId);
+          let foundVisit = todaysVisits.find(v => v.id === visitId);
+          
+          if (!foundVisit) {
+             // Try refreshing data
+             const visits = await getDailyAppointments(reportDate);
+             setTodaysVisits(visits);
+             foundVisit = visits.find(v => v.id === visitId);
+          }
           
           if (foundVisit) {
               setScannedAppointment(foundVisit);
@@ -228,7 +303,7 @@ const GateScanner: React.FC = () => {
       }
   };
 
-  const resetScanner = () => {
+  const resetScanner = async () => {
       setScanResult(null);
       setScannedExit(null);
       setScannedAppointment(null);
@@ -237,7 +312,10 @@ const GateScanner: React.FC = () => {
       setIsAlreadyProcessed(false);
       isProcessingScan.current = false;
       
-      if (!isScannerRunning.current) startScanner();
+      // Ensure scanner is running if it stopped
+      if (!isScannerRunning.current) {
+          await startScanner();
+      }
   };
 
   const handleManualExit = async (id: string) => {
@@ -388,7 +466,7 @@ const GateScanner: React.FC = () => {
                         <div className="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center text-white z-30 p-6 text-center">
                             <AlertCircle size={48} className="text-red-500 mb-4"/>
                             <p className="font-bold mb-4">{scanError}</p>
-                            <button onClick={startScanner} className="bg-white text-black px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-200"><RefreshCw size={16}/> إعادة</button>
+                            <button onClick={() => { setScanError(null); startScanner(); }} className="bg-white text-black px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-200"><RefreshCw size={16}/> إعادة</button>
                         </div>
                     )}
                 </div>

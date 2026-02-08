@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Search, UserCheck, School, X, CheckSquare, Square, Loader2, RefreshCw, Edit, Save, Smartphone, Hash, GraduationCap } from 'lucide-react';
-import { getStudents, syncStudentsBatch, getStudentsSync, addStudent, deleteStudent, updateStudent } from '../../services/storage';
+import { getStudents, syncStudentsBatch, getStudentsSync, addStudent, deleteStudent, updateStudent, getAvailableClassesForGrade } from '../../services/storage';
 import { Student } from '../../types';
 import { GRADES, CLASSES } from '../../constants';
 
@@ -28,9 +28,12 @@ const Students: React.FC = () => {
       name: '',
       studentId: '',
       grade: GRADES[0],
-      className: CLASSES[0],
+      className: '',
       phone: ''
   });
+
+  // Dynamic class list for suggestions
+  const [existingClassesForForm, setExistingClassesForForm] = useState<string[]>([]);
 
   const fetchStudents = async (force = false) => {
     if (force || students.length === 0) setLoading(true);
@@ -47,12 +50,26 @@ const Students: React.FC = () => {
 
   useEffect(() => { fetchStudents(); }, []);
 
+  // Fetch classes when grade changes in modal
+  useEffect(() => {
+      if (showModal && formData.grade) {
+          getAvailableClassesForGrade(formData.grade).then(setExistingClassesForForm);
+      } else {
+          setExistingClassesForForm([]);
+      }
+  }, [formData.grade, showModal]);
+
   const handleRefresh = () => fetchStudents(true);
 
   const filteredStudents = useMemo(() => {
-    return students.filter(s => 
-      s.name.includes(searchTerm) || s.studentId.includes(searchTerm) || s.phone.includes(searchTerm)
-    );
+    return students.filter(s => {
+      if (!s) return false;
+      const name = s.name || '';
+      const sid = s.studentId || '';
+      const phone = s.phone || '';
+      const search = searchTerm || '';
+      return name.includes(search) || sid.includes(search) || phone.includes(search);
+    });
   }, [students, searchTerm]);
 
   // --- Bulk Selection ---
@@ -85,7 +102,7 @@ const Students: React.FC = () => {
   // --- Add / Edit Logic ---
   const openAddModal = () => {
       setIsEditing(false);
-      setFormData({ name: '', studentId: '', grade: GRADES[0], className: CLASSES[0], phone: '' });
+      setFormData({ name: '', studentId: '', grade: GRADES[0], className: '', phone: '' });
       setShowModal(true);
   };
 
@@ -111,11 +128,17 @@ const Students: React.FC = () => {
         return;
     }
 
+    if (!formData.className.trim()) {
+        alert("يرجى إدخال اسم الفصل.");
+        return;
+    }
+
     setLoading(true); 
     try {
       const studentPayload: Student = {
           id: currentStudentId || '', // ID ignored on insert, used on update logic if needed
-          ...formData
+          ...formData,
+          className: formData.className.trim() // Ensure clean string
       };
 
       if (isEditing) {
@@ -153,11 +176,13 @@ const Students: React.FC = () => {
   // --- Excel Logic ---
   const mapCodeToGrade = (code: string | number): string => {
     const c = code ? code.toString().trim() : '';
-    if (c === '725' || c === '0725') return 'الأول متوسط';
-    if (c === '825' || c === '0825') return 'الثاني متوسط';
-    if (c === '925' || c === '0925') return 'الثالث متوسط';
+    // Map common codes or names
+    if (c === '725' || c === '0725' || c.includes('أول')) return 'الأول متوسط';
+    if (c === '825' || c === '0825' || c.includes('ثاني')) return 'الثاني متوسط';
+    if (c === '925' || c === '0925' || c.includes('ثالث')) return 'الثالث متوسط';
     if (GRADES.includes(c)) return c;
-    return ''; 
+    // Return original if no mapping found (will be selectable later)
+    return c || GRADES[0]; 
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,40 +192,93 @@ const Students: React.FC = () => {
 
     setProcessingFile(true);
     try {
+        // 1. Fetch current students from DB to compare for deletions
+        // Force true to get latest DB state to ensure accuracy
+        const currentDbStudents = await getStudents(true); 
+
         const arrayBuffer = await file.arrayBuffer();
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
-        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         
-        if (data.length === 0) { alert("الملف فارغ!"); return; }
+        // Target Sheet2 or the second sheet
+        let ws = wb.Sheets['Sheet2'];
+        if (!ws && wb.SheetNames.length > 1) {
+             ws = wb.Sheets[wb.SheetNames[1]];
+        }
+        
+        if (!ws) { 
+            alert("لم يتم العثور على ورقة العمل 'Sheet2' في الملف."); 
+            return; 
+        }
+
+        // Parse Options:
+        // header: "A" -> Maps columns to A, B, C, D, E, F...
+        // range: 4 -> Skips rows 0, 1, 2, 3. Starts reading data from Row 5.
+        // (User said Headers are Row 4, so data starts Row 5)
+        const data = XLSX.utils.sheet_to_json(ws, { 
+            header: "A", 
+            range: 4, 
+            raw: false // Force string conversion
+        });
+        
+        if (data.length === 0) { alert("الملف فارغ أو التنسيق غير مطابق!"); return; }
 
         const toUpsert: Student[] = [];
-        data.forEach((row: any) => {
-            const name = row['الاسم'] || row['name'] || row['Name'];
-            const studentIdRaw = row['السجل المدني'] || row['الهوية'] || row['studentId'] || row['ID'];
-            const gradeRaw = row['الصف'] || row['grade'] || row['Grade'];
-            const classRaw = row['الفصل'] || row['className'] || row['Class'];
-            const phone = row['الجوال'] || row['رقم الجوال'] || row['phone'] || '';
+        const fileStudentIds = new Set<string>();
 
-            if (name && studentIdRaw) {
+        data.forEach((row: any) => {
+            // Columns Mapping as requested:
+            // B: Phone, C: Class, D: Grade, E: Name, F: Student ID
+            const phone = row['B'] ? row['B'].toString().trim() : '';
+            const className = row['C'] ? row['C'].toString().trim() : '';
+            const gradeRaw = row['D'] ? row['D'].toString().trim() : '';
+            const name = row['E'] ? row['E'].toString().trim() : '';
+            const studentId = row['F'] ? row['F'].toString().trim() : '';
+
+            if (name && studentId) {
+                const grade = mapCodeToGrade(gradeRaw);
+                
                 toUpsert.push({
-                    id: '',
-                    name: name.toString().trim(),
-                    studentId: studentIdRaw.toString().trim(),
-                    grade: mapCodeToGrade(gradeRaw) || GRADES[0],
-                    className: classRaw ? classRaw.toString().trim() : CLASSES[0],
-                    phone: phone.toString().trim()
+                    id: '', // Handled by storage
+                    name,
+                    studentId,
+                    grade: grade || GRADES[0],
+                    className: className || '1',
+                    phone
                 });
+                
+                fileStudentIds.add(studentId);
             }
         });
 
-        if (toUpsert.length === 0) { alert("لا توجد بيانات صالحة."); return; }
+        if (toUpsert.length === 0) { alert("لا توجد بيانات صالحة (تأكد من الأعمدة B-F في Sheet2)."); return; }
         
-        if (window.confirm(`سيتم معالجة ${toUpsert.length} طالب. متابعة؟`)) {
-            await syncStudentsBatch(toUpsert, [], []); 
+        // Calculate Deletions: Students in DB but NOT in the Excel file
+        const toDeleteDbIds = currentDbStudents
+            .filter(s => !fileStudentIds.has(s.studentId))
+            .map(s => s.id);
+
+        const deleteMsg = toDeleteDbIds.length > 0 
+            ? `\n⚠️ سيتم حذف ${toDeleteDbIds.length} طالب موجودين في النظام ولكن غير موجودين في الملف.` 
+            : '';
+
+        if (window.confirm(`تم العثور على ${toUpsert.length} طالب في الملف.${deleteMsg}\n\nهل تريد المتابعة وتحديث قاعدة البيانات بالكامل؟\n(هذه العملية قد تستغرق بضع ثوانٍ)`)) {
+            // Use the updated function that returns counts
+            const result = await syncStudentsBatch(toUpsert, [], toDeleteDbIds); 
             await fetchStudents(true); 
-            alert("تمت العملية بنجاح!");
+            
+            // Detailed Feedback
+            alert(`✅ تمت العملية بنجاح!\n\n` +
+                  `➕ تمت إضافة: ${result.added} طالب\n` +
+                  `🔄 تم تحديث: ${result.updated} طالب\n` +
+                  `❌ تم حذف: ${result.deleted} طالب`);
         }
-    } catch (error: any) { alert(`خطأ: ${error.message}`); } finally { setProcessingFile(false); e.target.value = ''; }
+    } catch (error: any) { 
+        console.error(error);
+        alert(`خطأ: ${error.message}`); 
+    } finally { 
+        setProcessingFile(false); 
+        e.target.value = ''; 
+    }
   };
 
   const inputClasses = "w-full p-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all font-bold text-sm";
@@ -304,8 +382,8 @@ const Students: React.FC = () => {
                             </button>
                         </div>
                         <div className="w-[30%] font-bold text-slate-800 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs border border-slate-200">{s.name.charAt(0)}</div>
-                            {s.name}
+                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs border border-slate-200">{(s.name || '?').charAt(0)}</div>
+                            {s.name || 'اسم غير متوفر'}
                         </div>
                         <div className="w-[20%] text-slate-600 flex items-center gap-2">
                             <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold">{s.grade}</span>
@@ -357,9 +435,18 @@ const Students: React.FC = () => {
                     </div>
                     <div>
                        <label className={labelClasses}>الفصل (الشعبة)</label>
-                       <select value={formData.className} onChange={e => setFormData({...formData, className: e.target.value})} className={inputClasses}>
-                          {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
-                       </select>
+                       {/* Changed from select to input with datalist to allow creating new classes */}
+                       <input 
+                         list="classOptions"
+                         required
+                         value={formData.className}
+                         onChange={e => setFormData({...formData, className: e.target.value})}
+                         className={inputClasses}
+                         placeholder="اكتب الفصل (أ، ب، 1...)"
+                       />
+                       <datalist id="classOptions">
+                          {existingClassesForForm.map(c => <option key={c} value={c} />)}
+                       </datalist>
                     </div>
                  </div>
                  <div>

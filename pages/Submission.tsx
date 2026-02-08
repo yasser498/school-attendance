@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Upload, CheckCircle, Calendar, User, FileText, Sparkles, AlertCircle, ChevronRight, Home, Paperclip, CalendarDays, Clock, ArrowRight } from 'lucide-react';
-import { getStudents, addRequest, uploadFile } from '../services/storage';
+import { Upload, CheckCircle, Calendar, User, FileText, Sparkles, AlertCircle, ChevronRight, Home, Paperclip, CalendarDays, Clock, ArrowRight, Loader2, Edit } from 'lucide-react';
+import { getStudents, addRequest, uploadFile, generateSmartContent } from '../services/storage';
 import { Student, ExcuseRequest, RequestStatus } from '../types';
 import { GRADES } from '../constants';
 
@@ -14,6 +14,9 @@ const Submission: React.FC = () => {
   const [step, setStep] = useState(1); // 1: Form, 2: Success
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  
+  // AI State
+  const [isEnhancing, setIsEnhancing] = useState(false);
   
   // Lock states
   const [isStudentLocked, setIsStudentLocked] = useState(false);
@@ -36,7 +39,7 @@ const Submission: React.FC = () => {
   // Data
   const [students, setStudents] = useState<Student[]>([]);
 
-  const SCHOOL_NAME = localStorage.getItem('school_name') || "متوسطة عماد الدين زنكي";
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "مدرسة عماد الدين زنكي المتوسطة";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,14 +105,42 @@ const Submission: React.FC = () => {
     }
   };
 
+  // AI Writing Assistant
+  const handleSmartEnhance = async () => {
+      if (!details.trim()) {
+          alert("الرجاء كتابة تفاصيل العذر أولاً ليقوم المساعد الذكي بتحسينها.");
+          return;
+      }
+      
+      setIsEnhancing(true);
+      try {
+          const prompt = `
+            بصفتك مساعداً لغوياً، قم بإعادة صياغة عذر الغياب التالي ليكون رسمياً، مهذباً، وواضحاً لتقديمه لإدارة المدرسة:
+            "${details}"
+            
+            اكتب النص المعاد صياغته فقط بدون مقدمات.
+          `;
+          
+          // Use Flash model for speed since this is a simple text task
+          const enhancedText = await generateSmartContent(prompt, undefined, 'gemini-2.5-flash');
+          setDetails(enhancedText.trim());
+      } catch (e) {
+          alert("تعذر الاتصال بالمساعد الذكي.");
+      } finally {
+          setIsEnhancing(false);
+      }
+  };
+
   const getDatesInRange = (startDateStr: string, endDateStr: string) => {
       const dates = [];
       const current = new Date(startDateStr);
       const end = new Date(endDateStr);
       let count = 0;
-      while (current <= end && count < 30) {
+      // Increased safety limit to 60 days
+      while (current <= end && count < 60) {
           const day = current.getDay();
-          if (day !== 5 && day !== 6) { // Skip Fri/Sat
+          // Exclude Friday (5) and Saturday (6)
+          if (day !== 5 && day !== 6) {
               dates.push(new Date(current).toISOString().split('T')[0]);
           }
           current.setDate(current.getDate() + 1);
@@ -122,18 +153,28 @@ const Submission: React.FC = () => {
     e.preventDefault();
     
     if (!selectedStudentId || !reason || !date || !file) return;
+    
+    // Single day weekend check
+    if (!isMultiDay) {
+        const d = new Date(date);
+        const day = d.getDay();
+        if (day === 5 || day === 6) {
+            alert("لا يمكن تقديم عذر في عطلة نهاية الأسبوع (الجمعة والسبت).");
+            return;
+        }
+    }
+
     if (isMultiDay && !endDate) { alert("يرجى تحديد تاريخ نهاية الغياب."); return; }
     if (isMultiDay && new Date(endDate) < new Date(date)) { alert("تاريخ النهاية يجب أن يكون بعد تاريخ البداية."); return; }
 
-    // Logic similar to previous implementation
     let datesToSubmit: string[] = [];
     if (isMultiDay) {
         datesToSubmit = getDatesInRange(date, endDate);
-        if (datesToSubmit.length === 0) { alert("الفترة المحددة لا تحتوي على أيام دراسية."); return; }
+        if (datesToSubmit.length === 0) { 
+            alert("الفترة المحددة تحتوي فقط على أيام عطلة نهاية أسبوع، أو التواريخ غير صحيحة."); 
+            return; 
+        }
     } else {
-        const selectedDateObj = new Date(date);
-        const day = selectedDateObj.getDay(); 
-        if (day === 5 || day === 6) { alert("لا يمكن تقديم عذر في أيام العطلة."); return; }
         datesToSubmit = [date];
     }
 
@@ -142,9 +183,20 @@ const Submission: React.FC = () => {
     try {
       const student = students.find(s => s.id === selectedStudentId);
       if (student) {
-        const attachmentUrl = await uploadFile(file);
-        if (!attachmentUrl) throw new Error("Upload failed");
+        // 1. Upload File
+        let attachmentUrl = "";
+        try {
+            attachmentUrl = await uploadFile(file);
+        } catch (uploadError) {
+            console.error("Upload Error:", uploadError);
+            alert("فشل رفع المرفق. يرجى المحاولة مرة أخرى أو اختيار ملف أصغر.");
+            setLoading(false);
+            return;
+        }
 
+        if (!attachmentUrl) throw new Error("Upload failed (no URL)");
+
+        // 2. Create Requests
         for (const d of datesToSubmit) {
             const newRequest: ExcuseRequest = {
               id: '', 
@@ -158,24 +210,20 @@ const Submission: React.FC = () => {
               attachmentName: file.name,
               attachmentUrl: attachmentUrl, 
               status: RequestStatus.PENDING,
-              submissionDate: new Date().toISOString(),
             };
             await addRequest(newRequest);
         }
         setStep(2); 
+      } else {
+          alert("خطأ في بيانات الطالب. يرجى التحديث والمحاولة مرة أخرى.");
       }
-    } catch (e) {
-      alert("حدث خطأ أثناء الإرسال. تأكد من الاتصال.");
+    } catch (e: any) {
+      console.error("Submission Error:", e);
+      alert(`حدث خطأ أثناء إرسال الطلب: ${e.message || 'تأكد من الاتصال بالإنترنت'}`);
     } finally {
       setLoading(false);
     }
   };
-
-  const today = new Date();
-  const maxDate = today.toISOString().split('T')[0];
-  const minDateObj = new Date();
-  minDateObj.setDate(today.getDate() - 30); 
-  const minDate = minDateObj.toISOString().split('T')[0];
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
@@ -227,13 +275,28 @@ const Submission: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
-                                <User className="text-blue-600" size={24}/>
-                                <div>
-                                    <p className="text-xs text-blue-500 font-bold uppercase">تقديم عذر للطالب</p>
-                                    <p className="font-bold text-blue-900">{selectedStudent?.name}</p>
-                                    <p className="text-xs text-blue-700">{selectedStudent?.grade} - {selectedStudent?.className}</p>
+                            <div id="selected-student-display" className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center justify-between group transition-all hover:shadow-sm">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-xl shadow-sm border border-blue-100">
+                                        {selectedStudent?.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-blue-500 font-bold uppercase mb-1 flex items-center gap-1"><User size={12}/> الطالب المحدد</p>
+                                        <p className="font-extrabold text-blue-900 text-lg leading-tight">{selectedStudent?.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-xs bg-white px-2 py-0.5 rounded text-blue-700 border border-blue-100 font-bold">{selectedStudent?.grade}</span>
+                                            <span className="text-xs bg-white px-2 py-0.5 rounded text-blue-700 border border-blue-100 font-bold">فصل {selectedStudent?.className}</span>
+                                        </div>
+                                    </div>
                                 </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setIsStudentLocked(false)}
+                                    className="p-2 bg-white text-blue-400 hover:text-blue-600 rounded-lg border border-blue-100 hover:border-blue-300 transition-all shadow-sm"
+                                    title="تغيير الطالب"
+                                >
+                                    <Edit size={18}/>
+                                </button>
                             </div>
                         )}
 
@@ -274,7 +337,8 @@ const Submission: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold text-slate-500 mb-1.5 block">تاريخ الغياب (البداية)</label>
                                 <div className="relative">
-                                    <input type="date" required min={minDate} max={maxDate} value={date} disabled={isDateLocked} onChange={(e) => setDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 disabled:bg-slate-100 disabled:text-slate-400" />
+                                    {/* Removed min/max constraints, but validation checks for weekends */}
+                                    <input type="date" required value={date} disabled={isDateLocked} onChange={(e) => setDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 disabled:bg-slate-100 disabled:text-slate-400" />
                                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                 </div>
                             </div>
@@ -282,9 +346,10 @@ const Submission: React.FC = () => {
                                 <div className="animate-fade-in">
                                     <label className="text-xs font-bold text-slate-500 mb-1.5 block">تاريخ النهاية (إلى)</label>
                                     <div className="relative">
-                                        <input type="date" required min={date} max={maxDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100" />
+                                        <input type="date" required min={date} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-3 pl-10 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100" />
                                         <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                     </div>
+                                    <p className="text-[10px] text-slate-400 mt-1 mr-1">سيتم استبعاد أيام الجمعة والسبت تلقائياً</p>
                                 </div>
                             )}
                         </div>
@@ -302,8 +367,19 @@ const Submission: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">تفاصيل إضافية (اختياري)</label>
-                            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 resize-none" placeholder="أي ملاحظات إضافية..."></textarea>
+                            <div className="flex justify-between items-end mb-1.5">
+                                <label className="text-xs font-bold text-slate-500 block">تفاصيل إضافية (اختياري)</label>
+                                <button 
+                                    type="button" 
+                                    onClick={handleSmartEnhance}
+                                    disabled={isEnhancing || !details}
+                                    className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                                >
+                                    {isEnhancing ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
+                                    تحسين الصياغة بالذكاء الاصطناعي
+                                </button>
+                            </div>
+                            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} className="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-100 resize-none" placeholder="مثال: كان يعاني من ارتفاع في الحرارة..."></textarea>
                         </div>
                     </div>
                 </div>

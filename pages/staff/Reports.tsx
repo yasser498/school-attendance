@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Calendar, BarChart2, Users, AlertCircle, Clock, CheckCircle, School, ChevronDown, Loader2, Printer, PieChart as PieIcon, TrendingUp, ArrowUpRight, Grid } from 'lucide-react';
 import { getDailyAttendanceReport, getStudents, getAttendanceRecords, getRequests } from '../../services/storage';
 import { AttendanceStatus, StaffUser, ClassAssignment, AttendanceRecord, RequestStatus, ExcuseRequest } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+
+const { useNavigate } = ReactRouterDOM as any;
 
 const StaffReports: React.FC = () => {
   const navigate = useNavigate();
@@ -28,7 +30,7 @@ const StaffReports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // School Identity
-  const SCHOOL_NAME = localStorage.getItem('school_name') || "المدرسة";
+  const SCHOOL_NAME = localStorage.getItem('school_name') || "مدرسة عماد الدين زنكي المتوسطة";
   const SCHOOL_LOGO = localStorage.getItem('school_logo') || "";
 
   useEffect(() => {
@@ -57,11 +59,13 @@ const StaffReports: React.FC = () => {
         setDateRequests(reqs);
         
         const assignedClasses = currentUser.assignments || [];
-        const filteredDetails = data.details.filter(d => 
+        
+        // 1. Get all records for my classes
+        const allMyRecords = data.details.filter(d => 
             assignedClasses.some(a => a.grade === d.grade && a.className === d.className)
         );
 
-        // Calculate Totals per teacher
+        // Calculate Totals
         const assignedStudents = allStudents.filter(s => 
             assignedClasses.some(a => a.grade === s.grade && a.className === s.className)
         );
@@ -70,28 +74,29 @@ const StaffReports: React.FC = () => {
         let totalAbsent = 0;
         let totalLate = 0;
         
-        filteredDetails.forEach(d => {
+        allMyRecords.forEach(d => {
             if (d.status === AttendanceStatus.ABSENT) totalAbsent++;
             if (d.status === AttendanceStatus.LATE) totalLate++;
         });
 
         const totalPresent = Math.max(0, assignedStudentsCount - totalAbsent - totalLate);
 
+        // Store records. We will filter 'Present' out in render for both Screen and Print.
         setReportData({
             totalPresent,
             totalAbsent,
             totalLate,
-            details: filteredDetails
+            details: allMyRecords 
         });
 
         // Calculate Daily Summary PER CLASS
         const summary = assignedClasses.map(cls => {
              const classStudentsCount = assignedStudents.filter(s => s.grade === cls.grade && s.className === cls.className).length;
-             const absents = filteredDetails.filter(d => d.grade === cls.grade && d.className === cls.className && d.status === AttendanceStatus.ABSENT).length;
-             const lates = filteredDetails.filter(d => d.grade === cls.grade && d.className === cls.className && d.status === AttendanceStatus.LATE).length;
-             const present = Math.max(0, classStudentsCount - absents - lates); // Simplified logic
+             const absents = allMyRecords.filter(d => d.grade === cls.grade && d.className === cls.className && d.status === AttendanceStatus.ABSENT).length;
+             const lates = allMyRecords.filter(d => d.grade === cls.grade && d.className === cls.className && d.status === AttendanceStatus.LATE).length;
+             const present = Math.max(0, classStudentsCount - absents - lates);
              
-             // Attendance Rate (Usually includes Late)
+             // Attendance Rate
              const rate = classStudentsCount > 0 ? Math.round(((classStudentsCount - absents) / classStudentsCount) * 100) : 0;
              const absentRate = classStudentsCount > 0 ? Math.round((absents / classStudentsCount) * 100) : 0;
              const lateRate = classStudentsCount > 0 ? Math.round((lates / classStudentsCount) * 100) : 0;
@@ -158,7 +163,6 @@ const StaffReports: React.FC = () => {
 
         myRecords.forEach(record => {
             const classKey = `${record.grade} - ${record.className}`;
-            // If class assignment changed, key might not exist in init, so safe check
             if (!classStats[classKey]) classStats[classKey] = { name: classKey, grade: record.grade, className: record.className, absent: 0, late: 0, total: 0, present: 0 };
 
             const dayName = new Date(record.date).toLocaleDateString('ar-SA', { weekday: 'long' });
@@ -258,6 +262,9 @@ const StaffReports: React.FC = () => {
     { name: 'تأخر', value: statsData.latenessRate, color: '#f59e0b' },
   ] : [];
 
+  // Filter for BOTH Screen and Print (Show Absent/Late Only)
+  const filteredDetails = reportData?.details.filter(d => d.status !== AttendanceStatus.PRESENT) || [];
+
   return (
     <>
       <style>
@@ -271,7 +278,7 @@ const StaffReports: React.FC = () => {
         `}
       </style>
 
-      {/* Print View (Daily Only) */}
+      {/* Print View */}
       <div id="staff-report-print" className="hidden">
          <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
             {SCHOOL_LOGO && <img src={SCHOOL_LOGO} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />}
@@ -308,23 +315,28 @@ const StaffReports: React.FC = () => {
                     </tr>
                     </thead>
                     <tbody>
-                    {reportData.details.map((d, idx) => {
-                        const status = getExcuseStatus(d.studentId, d.studentName);
-                        return (
-                        <tr key={idx}>
-                            <td className="border p-2">{d.studentName}</td>
-                            <td className="border p-2">{d.grade}</td>
-                            <td className="border p-2">{d.className}</td>
-                            <td className="border p-2">{d.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}</td>
-                            <td className="border p-2">
-                                {status === RequestStatus.APPROVED ? 'مقبول ✅' : 
-                                 status === RequestStatus.REJECTED ? 'مرفوض ❌' : 
-                                 status === RequestStatus.PENDING ? 'قيد المراجعة ⏳' : '-'}
-                            </td>
-                        </tr>
-                    )})}
-                    {reportData.details.length === 0 && (
-                        <tr><td colSpan={5} className="border p-4 text-center">لا يوجد غياب أو تأخر مسجل للفصول المسندة</td></tr>
+                    {filteredDetails.length > 0 ? (
+                        filteredDetails.map((d, idx) => {
+                            const status = getExcuseStatus(d.studentId, d.studentName);
+                            return (
+                            <tr key={idx}>
+                                <td className="border p-2">{d.studentName}</td>
+                                <td className="border p-2">{d.grade}</td>
+                                <td className="border p-2">{d.className}</td>
+                                <td className="border p-2 font-bold">
+                                    {d.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}
+                                </td>
+                                <td className="border p-2">
+                                    {status ? (
+                                        status === RequestStatus.APPROVED ? 'مقبول ✅' : 
+                                        status === RequestStatus.REJECTED ? 'مرفوض ❌' : 
+                                        status === RequestStatus.PENDING ? 'قيد المراجعة ⏳' : '-'
+                                    ) : (d.status === AttendanceStatus.ABSENT ? 'لا يوجد عذر' : '-')}
+                                </td>
+                            </tr>
+                        )})
+                    ) : (
+                        <tr><td colSpan={5} className="border p-4 text-center">لا يوجد حالات غياب أو تأخر</td></tr>
                     )}
                     </tbody>
                 </table>
@@ -419,13 +431,14 @@ const StaffReports: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Detailed List */}
+                        {/* Detailed List (Filtered: Absent & Late Only) */}
                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100">
-                                <h3 className="font-bold text-slate-800">قائمة الطلاب (فصولي فقط)</h3>
+                            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                                <h3 className="font-bold text-slate-800">قائمة الغياب والتأخر</h3>
+                                <span className="text-xs bg-white border px-2 py-1 rounded text-slate-500">يظهر فقط الغائبين والمتأخرين</span>
                             </div>
                             
-                            {reportData.details.length === 0 ? (
+                            {filteredDetails.length === 0 ? (
                                 <div className="p-12 text-center text-slate-400">
                                     <Users className="mx-auto mb-2 opacity-50" size={48} />
                                     <p>سجل نظيف! لا يوجد غياب أو تأخر في فصولك لهذا اليوم.</p>
@@ -442,7 +455,7 @@ const StaffReports: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {reportData.details.map((d, idx) => {
+                                        {filteredDetails.map((d, idx) => {
                                             const status = getExcuseStatus(d.studentId, d.studentName);
                                             return (
                                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -451,9 +464,7 @@ const StaffReports: React.FC = () => {
                                                 <td className="p-4 text-slate-600">{d.className}</td>
                                                 <td className="p-4">
                                                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                                        d.status === AttendanceStatus.ABSENT 
-                                                        ? 'bg-red-100 text-red-700' 
-                                                        : 'bg-amber-100 text-amber-700'
+                                                        d.status === AttendanceStatus.ABSENT ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                                                     }`}>
                                                         {d.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}
                                                     </span>
@@ -527,9 +538,10 @@ const StaffReports: React.FC = () => {
             </>
         )}
 
-        {/* ================= TAB: GENERAL STATS ================= */}
+        {/* ... General Stats Tab ... */}
         {activeTab === 'stats' && (
             <>
+               {/* Same content as before */}
                 {loading || !statsData ? (
                     <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                         <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
@@ -537,7 +549,6 @@ const StaffReports: React.FC = () => {
                     </div>
                 ) : (
                     <div className="space-y-6 animate-fade-in">
-                        
                         {/* KPIs */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">

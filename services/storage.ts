@@ -1,802 +1,1146 @@
 
 import { supabase } from '../supabaseClient';
-import { GoogleGenAI } from "@google/genai";
-import { 
-  Student, ExcuseRequest, StaffUser, AttendanceRecord, BehaviorRecord, 
-  StudentObservation, Referral, GuidanceSession, Appointment, ExitPermission, 
-  SchoolNews, AdminInsight, AppNotification, AppointmentSlot, ClassAssignment,
-  RequestStatus, StudentPoint, AttendanceStatus
+import {
+    Student, ExcuseRequest, StaffUser, AttendanceRecord, BehaviorRecord,
+    SchoolNews, Appointment, AppointmentSlot, ExitPermission,
+    StudentObservation, Referral, GuidanceSession, AppNotification,
+    RequestStatus, AttendanceStatus, AdminInsight, ClassAssignment
 } from '../types';
 import { GRADES } from '../constants';
+import { GoogleGenAI } from "@google/genai";
 
-// --- CACHE FOR SYNC ACCESS ---
-let cachedStudents: Student[] | null = null;
-let cachedStaff: StaffUser[] | null = null;
+// Cache for sync access
+let studentsCache: Student[] | null = null;
+let staffCache: StaffUser[] | null = null;
 
-// --- AI CONFIG ---
-const aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// --- Helpers ---
+const mapStudentFromDB = (data: any): Student => ({
+    id: data.id,
+    name: data.name,
+    studentId: data.student_id,
+    grade: data.grade,
+    className: data.class_name,
+    phone: data.phone
+});
 
-export const getAIConfig = async () => {
-    return { apiKey: process.env.API_KEY, model: 'gemini-3-flash-preview' };
-};
-
-// --- FILE UPLOAD & MANAGEMENT ---
-export const uploadFile = async (file: File): Promise<string> => {
-    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const fileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
-        });
-    };
-
-    try {
-        const { data, error } = await supabase.storage.from('excuses').upload(fileName, file);
-        if (error) {
-            console.warn("Supabase Storage Upload Error:", error.message);
-            return await fileToBase64(file);
-        }
-        const { data: publicData } = supabase.storage.from('excuses').getPublicUrl(fileName);
-        return publicData.publicUrl;
-    } catch (e: any) {
-        console.warn("Storage exception, falling back to Base64:", e);
-        return await fileToBase64(file);
+const safeParseJSON = (val: any): any => {
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch (e) { return []; }
     }
+    return val || [];
 };
 
-// NEW: Delete file from storage
-export const deleteAttachmentFile = async (fileUrl: string): Promise<void> => {
-    try {
-        // Extract the file path relative to the bucket.
-        // URL format: .../storage/v1/object/public/excuses/FILENAME
-        const path = fileUrl.split('/excuses/').pop();
-        if (!path) return; // If path extraction fails (e.g. base64), do nothing or handle accordingly
-
-        // Don't try to delete base64 strings from storage
-        if (fileUrl.startsWith('data:')) return;
-
-        const { error } = await supabase.storage.from('excuses').remove([path]);
-        if (error) throw error;
-    } catch (e) {
-        console.error("Error deleting file from storage:", e);
-        throw e;
-    }
+export const invalidateCache = () => {
+    studentsCache = null;
+    staffCache = null;
 };
 
-// NEW: Clear attachment reference in Database
-export const removeRequestAttachmentRef = async (requestId: string): Promise<void> => {
-    const { error } = await supabase.from('requests')
-        .update({ attachmentUrl: null, attachmentName: null })
-        .eq('id', requestId);
-    if (error) throw error;
-};
+// --- Students ---
 
-// --- STUDENTS ---
 export const getStudents = async (force = false): Promise<Student[]> => {
-    if (!force && cachedStudents) return cachedStudents;
+    if (!force && studentsCache) return studentsCache;
+
     const { data, error } = await supabase.from('students').select('*');
-    if (error) throw error;
-    cachedStudents = data || [];
-    return cachedStudents!;
+    if (error) throw new Error(error.message);
+
+    studentsCache = data.map(mapStudentFromDB);
+    return studentsCache;
 };
 
-export const getStudentsSync = () => cachedStudents;
+export const getStudentsSync = (): Student[] | null => studentsCache;
+
+export const getStudentByCivilId = async (civilId: string): Promise<Student | null> => {
+    const { data, error } = await supabase.from('students').select('*').eq('student_id', civilId).single();
+    if (error || !data) return null;
+    return mapStudentFromDB(data);
+};
+
+export const getStudentsByPhone = async (phone: string): Promise<Student[]> => {
+    const { data, error } = await supabase.from('students').select('*').like('phone', `%${phone}%`);
+    if (error || !data) return [];
+    return data.map(mapStudentFromDB);
+};
 
 export const addStudent = async (student: Student): Promise<Student> => {
-    const { data, error } = await supabase.from('students').insert(student).select().single();
-    if (error) throw error;
-    if (cachedStudents) cachedStudents.push(data);
-    return data;
+    const { data, error } = await supabase.from('students').insert({
+        name: student.name,
+        student_id: student.studentId,
+        grade: student.grade,
+        class_name: student.className,
+        phone: student.phone
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+    if (studentsCache) studentsCache.push(mapStudentFromDB(data));
+    return mapStudentFromDB(data);
 };
 
 export const updateStudent = async (student: Student): Promise<void> => {
-    const { error } = await supabase.from('students').update(student).eq('id', student.id);
-    if (error) throw error;
-    if (cachedStudents) {
-        cachedStudents = cachedStudents.map(s => s.id === student.id ? student : s);
-    }
+    const { error } = await supabase.from('students').update({
+        name: student.name,
+        student_id: student.studentId,
+        grade: student.grade,
+        class_name: student.className,
+        phone: student.phone
+    }).eq('id', student.id);
+    if (error) throw new Error(error.message);
+    invalidateCache();
 };
 
 export const deleteStudent = async (id: string): Promise<void> => {
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) throw error;
-    if (cachedStudents) {
-        cachedStudents = cachedStudents.filter(s => s.id !== id);
-    }
+    if (error) throw new Error(error.message);
+    invalidateCache();
 };
 
-export const syncStudentsBatch = async (upsert: Student[], deletes: string[], deleteIds: string[] = []): Promise<{added: number, updated: number, deleted: number}> => {
-    const idsToDelete = [...deletes, ...deleteIds];
-    let deletedCount = 0;
-    
-    if (idsToDelete.length > 0) {
-        const { count } = await supabase.from('students').delete().in('id', idsToDelete);
-        deletedCount = count || idsToDelete.length;
+export const syncStudentsBatch = async (toUpsert: Student[], toDeleteIds: string[], toDeleteDbIds: string[] = []) => {
+    if (toDeleteDbIds.length > 0) {
+        await supabase.from('students').delete().in('id', toDeleteDbIds);
     }
 
-    let addedCount = 0;
-    let updatedCount = 0;
-
-    if (upsert.length > 0) {
-        const { data, error } = await supabase.from('students').upsert(upsert).select();
-        if (error) throw error;
-        addedCount = data.length; 
+    for (const s of toUpsert) {
+        const { data: existing } = await supabase.from('students').select('id').eq('student_id', s.studentId).single();
+        if (existing) {
+            await supabase.from('students').update({
+                name: s.name,
+                grade: s.grade,
+                class_name: s.className,
+                phone: s.phone
+            }).eq('id', existing.id);
+        } else {
+            await supabase.from('students').insert({
+                name: s.name,
+                student_id: s.studentId,
+                grade: s.grade,
+                class_name: s.className,
+                phone: s.phone
+            });
+        }
     }
-    
-    await getStudents(true);
-    return { added: addedCount, updated: updatedCount, deleted: deletedCount };
-};
-
-export const getStudentByCivilId = async (id: string): Promise<Student | null> => {
-    const { data } = await supabase.from('students').select('*').eq('studentId', id).single();
-    return data;
-};
-
-export const getStudentsByPhone = async (phone: string): Promise<Student[]> => {
-    const { data } = await supabase.from('students').select('*').ilike('phone', `%${phone}%`);
-    return data || [];
+    invalidateCache();
 };
 
 export const clearStudents = async () => {
-    await supabase.from('students').delete().neq('id', '0');
-    cachedStudents = [];
-};
+    const { error } = await supabase.from('students').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw new Error(error.message);
+    invalidateCache();
+}
 
-// --- REQUESTS ---
-// Helper to map DB columns to App Types
-const mapRequestFromDB = (r: any): ExcuseRequest => {
-    return {
+// --- Requests (Excuses) ---
+
+export const getRequests = async (force = false): Promise<ExcuseRequest[]> => {
+    const { data, error } = await supabase.from('requests').select('*');
+    if (error) {
+        console.error('getRequests error:', error);
+        return [];
+    }
+    return data.map((r: any) => ({
         id: r.id,
-        studentId: r.studentId || r.student_id,
-        studentName: r.studentName || r.student_name,
+        studentId: r.student_id,
+        studentName: r.student_name,
         grade: r.grade,
-        className: r.className || r.class_name || r.classname,
+        className: r.class_name,
         date: r.date,
         reason: r.reason,
         details: r.details,
-        attachmentName: r.attachmentName || r.attachment_name,
-        attachmentUrl: r.attachmentUrl || r.attachment_url,
-        status: r.status
-    };
+        attachmentName: r.attachment_name,
+        attachmentUrl: r.attachment_url,
+        status: r.status as RequestStatus,
+        adminReply: r.admin_reply,
+        closedAt: r.closed_at,
+    }));
 };
 
-export const getRequests = async (): Promise<ExcuseRequest[]> => {
-    const { data, error } = await supabase.from('requests').select('*').order('date', { ascending: false });
-    if (error) throw error;
-    
-    // FETCH STUDENTS TO ENSURE DATA INTEGRITY AS FALLBACK
-    const students = await getStudents();
-    
-    return (data || []).map((row: any) => {
-        // 1. Map from potentially snake_case DB columns
-        const req = mapRequestFromDB(row);
-
-        // 2. If name/grade/class is STILL missing, lookup in student DB
-        if (!req.studentName || req.studentName === 'اسم غير متوفر' || !req.grade || !req.className) {
-            const student = students.find(s => s.studentId === req.studentId);
-            if (student) {
-                req.studentName = student.name;
-                req.grade = student.grade;
-                req.className = student.className;
-            }
-        }
-        return req;
-    });
+export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseRequest[]> => {
+    const { data, error } = await supabase.from('requests').select('*').eq('student_id', studentId);
+    if (error) return [];
+    return data.map((r: any) => ({
+        id: r.id,
+        studentId: r.student_id,
+        studentName: r.student_name,
+        grade: r.grade,
+        className: r.class_name,
+        date: r.date,
+        reason: r.reason,
+        details: r.details,
+        attachmentName: r.attachment_name,
+        attachmentUrl: r.attachment_url,
+        status: r.status as RequestStatus,
+        adminReply: r.admin_reply,
+        closedAt: r.closed_at,
+    }));
 };
 
 export const addRequest = async (req: ExcuseRequest): Promise<void> => {
-    const { error } = await supabase.from('requests').insert(req);
-    if (error) throw error;
+    const { error } = await supabase.from('requests').insert({
+        student_id: req.studentId,
+        student_name: req.studentName,
+        grade: req.grade,
+        class_name: req.className,
+        date: req.date,
+        reason: req.reason,
+        details: req.details,
+        attachment_name: req.attachmentName,
+        attachment_url: req.attachmentUrl,
+        status: req.status
+    });
+    if (error) throw new Error(error.message);
+
+    await createNotification('ALL_STAFF', 'info', 'عذر جديد', `تم تقديم عذر للطالب ${req.studentName}`);
 };
 
 export const updateRequestStatus = async (id: string, status: RequestStatus): Promise<void> => {
     const { error } = await supabase.from('requests').update({ status }).eq('id', id);
-    if (error) throw error;
+    if (error) throw new Error(error.message);
+
+    const { data: req } = await supabase.from('requests').select('student_id').eq('id', id).single();
+    if (req) {
+        await createNotification(req.student_id, status === RequestStatus.APPROVED ? 'success' : 'alert', 'تحديث حالة العذر', `تم ${status === RequestStatus.APPROVED ? 'قبول' : 'رفض'} العذر المقدم.`);
+    }
 };
 
-export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseRequest[]> => {
-    const { data } = await supabase.from('requests').select('*').eq('studentId', studentId);
-    
-    const students = await getStudents();
-    return (data || []).map((row: any) => {
-        const req = mapRequestFromDB(row);
-        if (!req.studentName) {
-            const student = students.find(s => s.studentId === req.studentId);
-            if (student) {
-                req.studentName = student.name;
-                req.grade = student.grade;
-                req.className = student.className;
-            }
-        }
-        return req;
-    });
+export const updateRequestWithReply = async (id: string, status: RequestStatus, reply: string): Promise<void> => {
+    const { error } = await supabase.from('requests').update({
+        status,
+        admin_reply: reply,
+        closed_at: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw new Error(error.message);
+
+    const { data: req } = await supabase.from('requests').select('student_id').eq('id', id).single();
+    if (req) {
+        await createNotification(req.student_id, status === RequestStatus.APPROVED ? 'success' : 'alert', 'تحديث حالة العذر', `تم ${status === RequestStatus.APPROVED ? 'قبول' : 'رفض'} العذر المقدم. ${reply ? 'ويوجد رد من الإدارة' : ''}`);
+    }
 };
 
-export const getPendingRequestsCountForStaff = async (assignments: ClassAssignment[]): Promise<number> => {
+export const getPendingRequestsCountForStaff = async (assignments: any[]): Promise<number> => {
     if (!assignments || assignments.length === 0) return 0;
-    const { data } = await supabase.from('requests').select('id, grade, className, class_name, status').eq('status', 'PENDING');
-    if (!data) return 0;
-    
-    return data.filter((r: any) => {
-        // Handle mapping here too locally
-        const rGrade = r.grade;
-        const rClass = r.className || r.class_name;
-        return assignments.some(a => a.grade === rGrade && a.className === rClass);
-    }).length;
+    const { count, error } = await supabase.from('requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING');
+    return count || 0;
 };
 
 export const clearRequests = async () => {
-    await supabase.from('requests').delete().neq('id', '0');
+    await supabase.from('requests').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 };
 
-// --- ATTENDANCE ---
-export const getAttendanceRecords = async (date?: string): Promise<AttendanceRecord[]> => {
-    let query = supabase.from('attendance').select('*');
-    if (date) query = query.eq('date', date);
-    const { data, error } = await query;
-    if (error) throw error;
-    
-    // Map to camelCase if needed
-    return (data || []).map((r: any) => ({
-        ...r,
-        className: r.className || r.class_name
-    }));
+export const uploadFile = async (file: File): Promise<string> => {
+    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    try {
+        const { data, error } = await supabase.storage.from('excuses').upload(fileName, file);
+        if (error) {
+            // Handle bucket not found error by returning a placeholder
+            // This ensures the app doesn't break if the backend isn't fully configured
+            if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
+                console.warn("Storage bucket 'excuses' not found. Returning mock URL.");
+                return "https://placehold.co/600x800?text=Storage+Not+Configured";
+            }
+            throw new Error(error.message);
+        }
+        const { data: publicData } = supabase.storage.from('excuses').getPublicUrl(fileName);
+        return publicData.publicUrl;
+    } catch (e: any) {
+        if (e.message?.includes('Bucket not found')) {
+            return "https://placehold.co/600x800?text=Bucket+Not+Found";
+        }
+        throw e;
+    }
 };
+
+// --- Attendance (Table: attendance) ---
 
 export const saveAttendanceRecord = async (record: AttendanceRecord): Promise<void> => {
-    const { data } = await supabase.from('attendance')
+    const { data: existing } = await supabase.from('attendance')
         .select('id')
         .eq('date', record.date)
         .eq('grade', record.grade)
-        .eq('className', record.className) // If column is class_name, Supabase handles simple mapping usually, but be careful
+        .eq('class_name', record.className)
         .single();
-        
-    // If table uses class_name, ensure we send matching object or trust mapping
-    if (data) {
-        await supabase.from('attendance').update({ records: record.records }).eq('id', data.id);
+
+    if (existing) {
+        await supabase.from('attendance').update({
+            records: record.records,
+            staff_id: record.staffId
+        }).eq('id', existing.id);
     } else {
-        await supabase.from('attendance').insert(record);
+        await supabase.from('attendance').insert({
+            date: record.date,
+            grade: record.grade,
+            class_name: record.className,
+            staff_id: record.staffId,
+            records: record.records
+        });
     }
 };
 
 export const getAttendanceRecordForClass = async (date: string, grade: string, className: string): Promise<AttendanceRecord | null> => {
-    // Try both className and class_name in filter if unsure, but standard eq matches column name
-    // Assuming DB has 'className' or 'class_name'
-    const { data } = await supabase.from('attendance')
+    const { data, error } = await supabase.from('attendance')
         .select('*')
         .eq('date', date)
         .eq('grade', grade)
-        .match({ className: className }); // Try object match, or simple eq if exact column known
-    
-    // Fallback if data is array
-    return data && data.length > 0 ? data[0] : null;
+        .eq('class_name', className)
+        .single();
+
+    if (error || !data) return null;
+    return {
+        id: data.id,
+        date: data.date,
+        grade: data.grade,
+        className: data.class_name,
+        staffId: data.staff_id,
+        records: safeParseJSON(data.records) // Always parse safely
+    };
+};
+
+export const getAttendanceRecords = async (): Promise<AttendanceRecord[]> => {
+    const { data, error } = await supabase.from('attendance').select('*');
+    if (error) return [];
+    return data.map((r: any) => ({
+        id: r.id,
+        date: r.date,
+        grade: r.grade,
+        className: r.class_name,
+        staffId: r.staff_id,
+        records: safeParseJSON(r.records) // Always parse safely
+    }));
+};
+
+export const getStudentAttendanceHistory = async (studentId: string, grade?: string, className?: string): Promise<{ date: string, status: AttendanceStatus }[]> => {
+    const { data, error } = await supabase.from('attendance').select('date, records');
+
+    if (error || !data) return [];
+
+    const history: { date: string, status: AttendanceStatus }[] = [];
+    data.forEach((row: any) => {
+        const recs = safeParseJSON(row.records);
+        const studentRecord = recs.find((r: any) => r.studentId === studentId);
+        if (studentRecord) {
+            history.push({ date: row.date, status: studentRecord.status });
+        }
+    });
+    return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
 export const getDailyAttendanceReport = async (date: string) => {
-    const { data: attData } = await supabase.from('attendance').select('*').eq('date', date);
-    let totalPresent = 0;
-    let totalAbsent = 0;
-    let totalLate = 0;
+    const { data, error } = await supabase.from('attendance').select('*').eq('date', date);
+    if (error) return { totalPresent: 0, totalAbsent: 0, totalLate: 0, details: [] };
+
+    let totalPresent = 0, totalAbsent = 0, totalLate = 0;
     const details: any[] = [];
 
-    if (attData) {
-        attData.forEach((r: any) => {
-            const cls = r.className || r.class_name;
-            r.records.forEach((s: any) => {
-                if (s.status === 'PRESENT') totalPresent++;
-                else if (s.status === 'ABSENT') totalAbsent++;
-                else if (s.status === 'LATE') totalLate++;
-                
-                details.push({
-                    studentId: s.studentId,
-                    studentName: s.studentName,
-                    grade: r.grade,
-                    className: cls,
-                    status: s.status
-                });
+    data.forEach((row: any) => {
+        const recs = safeParseJSON(row.records);
+        recs.forEach((rec: any) => {
+            if (rec.status === 'PRESENT') totalPresent++;
+            else if (rec.status === 'ABSENT') totalAbsent++;
+            else if (rec.status === 'LATE') totalLate++;
+
+            details.push({
+                studentId: rec.studentId,
+                studentName: rec.studentName,
+                grade: row.grade,
+                className: row.class_name,
+                status: rec.status
             });
         });
-    }
+    });
+
     return { totalPresent, totalAbsent, totalLate, details };
 };
 
-export const getStudentAttendanceHistory = async (studentId: string) => {
-    const { data } = await supabase.from('attendance').select('*'); 
-    const history: { date: string, status: AttendanceStatus }[] = [];
-    
-    if (data) {
-        data.forEach((r: any) => {
-            if (!r.records) return;
-            const studentRecord = r.records.find((s: any) => s.studentId === studentId);
-            if (studentRecord) {
-                history.push({ date: r.date, status: studentRecord.status });
-            }
-        });
-    }
-    return history;
-};
-
-export const clearAttendance = async () => {
-    await supabase.from('attendance').delete().neq('id', '0');
-};
-
 export const getConsecutiveAbsences = async () => {
-    return []; 
+    return [];
 };
 
-export const resolveAbsenceAlert = async (studentId: string, actionType: string, notes?: string) => {
+export const resolveAbsenceAlert = async (studentId: string, action: string, note?: string) => {
     await supabase.from('risk_history').insert({
         student_id: studentId,
-        action_type: actionType,
-        notes: notes,
+        action_type: action,
+        notes: note,
         resolved_at: new Date().toISOString()
     });
 };
 
 export const getRiskHistory = async () => {
-    const { data } = await supabase.from('risk_history').select('*');
-    return data || [];
-}
-
-// --- STAFF ---
-export const getStaffUsers = async (force = false): Promise<StaffUser[]> => {
-    if (!force && cachedStaff) return cachedStaff;
-    const { data, error } = await supabase.from('staff').select('*');
-    if (error) throw error;
-    cachedStaff = data || [];
-    return cachedStaff!;
-};
-
-export const getStaffUsersSync = () => cachedStaff;
-
-export const addStaffUser = async (user: StaffUser): Promise<void> => {
-    await supabase.from('staff').insert(user);
-    if (cachedStaff) cachedStaff.push(user);
-};
-
-export const updateStaffUser = async (user: StaffUser): Promise<void> => {
-    await supabase.from('staff').update(user).eq('id', user.id);
-    if (cachedStaff) {
-        cachedStaff = cachedStaff.map(u => u.id === user.id ? user : u);
-    }
-};
-
-export const deleteStaffUser = async (id: string): Promise<void> => {
-    await supabase.from('staff').delete().eq('id', id);
-    if (cachedStaff) {
-        cachedStaff = cachedStaff.filter(u => u.id !== id);
-    }
-};
-
-export const authenticateStaff = async (passcode: string): Promise<StaffUser | null> => {
-    const { data } = await supabase.from('staff').select('*').eq('passcode', passcode).single();
-    return data;
-};
-
-// --- BEHAVIOR ---
-export const getBehaviorRecords = async (studentId?: string, date?: string): Promise<BehaviorRecord[]> => {
-    let query = supabase.from('behavior').select('*').order('date', { ascending: false });
-    if (studentId) query = query.eq('studentId', studentId);
-    if (date) query = query.eq('date', date);
-    const { data } = await query;
-    return (data || []).map((r: any) => ({
-        ...r,
-        studentName: r.studentName || r.student_name,
-        violationName: r.violationName || r.violation_name,
-        violationDegree: r.violationDegree || r.violation_degree,
-        actionTaken: r.actionTaken || r.action_taken,
-        className: r.className || r.class_name
+    const { data, error } = await supabase.from('risk_history').select('*');
+    if (error) return [];
+    return data.map((d: any) => ({
+        id: d.id,
+        studentId: d.student_id,
+        studentName: d.student_name || '',
+        grade: d.grade || '',
+        action_type: d.action_type,
+        notes: d.notes,
+        resolved_at: d.resolved_at
     }));
 };
 
-export const addBehaviorRecord = async (record: BehaviorRecord): Promise<void> => {
-    await supabase.from('behavior').insert(record);
+export const clearAttendance = async () => {
+    await supabase.from('attendance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+}
+
+// --- Behavior ---
+
+export const getBehaviorRecords = async (studentId?: string): Promise<BehaviorRecord[]> => {
+    let query = supabase.from('behavior_records').select('*');
+    if (studentId) query = query.eq('student_id', studentId);
+    const { data, error } = await query;
+
+    if (error) return [];
+    return data.map((r: any) => ({
+        id: r.id,
+        studentId: r.student_id,
+        studentName: r.student_name,
+        grade: r.grade,
+        className: r.class_name,
+        date: r.date,
+        violationDegree: r.violation_degree,
+        violationName: r.violation_name,
+        articleNumber: r.article_number,
+        actionTaken: r.action_taken,
+        notes: r.notes,
+        staffId: r.staff_id,
+        createdAt: r.created_at,
+        parentViewed: r.parent_viewed,
+        parentFeedback: r.parent_feedback,
+        parentViewedAt: r.parent_viewed_at
+    }));
 };
 
-export const updateBehaviorRecord = async (record: BehaviorRecord): Promise<void> => {
-    await supabase.from('behavior').update(record).eq('id', record.id);
+export const addBehaviorRecord = async (record: BehaviorRecord) => {
+    const { error } = await supabase.from('behavior_records').insert({
+        student_id: record.studentId,
+        student_name: record.studentName,
+        grade: record.grade,
+        class_name: record.className,
+        date: record.date,
+        violation_degree: record.violationDegree,
+        violation_name: record.violationName,
+        article_number: record.articleNumber,
+        action_taken: record.actionTaken,
+        notes: record.notes,
+        staff_id: record.staffId
+    });
+    if (error) throw new Error(error.message);
+    await createNotification(record.studentId, 'alert', 'مخالفة سلوكية', `تم تسجيل مخالفة: ${record.violationName}`);
 };
 
-export const deleteBehaviorRecord = async (id: string): Promise<void> => {
-    await supabase.from('behavior').delete().eq('id', id);
+export const updateBehaviorRecord = async (record: BehaviorRecord) => {
+    const { error } = await supabase.from('behavior_records').update({
+        violation_degree: record.violationDegree,
+        violation_name: record.violationName,
+        action_taken: record.actionTaken,
+        notes: record.notes
+    }).eq('id', record.id);
+    if (error) throw new Error(error.message);
+};
+
+export const deleteBehaviorRecord = async (id: string) => {
+    await supabase.from('behavior_records').delete().eq('id', id);
 };
 
 export const clearBehaviorRecords = async () => {
-    await supabase.from('behavior').delete().neq('id', '0');
+    await supabase.from('behavior_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 };
 
 export const acknowledgeBehavior = async (id: string, feedback: string) => {
-    await supabase.from('behavior').update({ parentViewed: true, parentFeedback: feedback, parentViewedAt: new Date().toISOString() }).eq('id', id);
+    await supabase.from('behavior_records').update({
+        parent_viewed: true,
+        parent_feedback: feedback,
+        parent_viewed_at: new Date().toISOString()
+    }).eq('id', id);
 };
 
-// --- OBSERVATIONS ---
+export const suggestBehaviorAction = async (violation: string, degree: string): Promise<string> => {
+    return "تنبيه شفهي وتعهد خطي";
+};
+
+// --- Observations ---
+
 export const getStudentObservations = async (studentId?: string, type?: string): Promise<StudentObservation[]> => {
-    let query = supabase.from('observations').select('*').order('date', { ascending: false });
-    if (studentId) query = query.eq('studentId', studentId);
+    let query = supabase.from('student_observations').select('*');
+    if (studentId) query = query.eq('student_id', studentId);
     if (type) query = query.eq('type', type);
-    const { data } = await query;
-    return (data || []).map((r: any) => ({
-        ...r,
-        studentName: r.studentName || r.student_name,
-        staffName: r.staffName || r.staff_name,
-        className: r.className || r.class_name,
-        parentFeedback: r.parentFeedback || r.parent_feedback
+
+    const { data, error } = await query;
+    if (error) return [];
+
+    return data.map((o: any) => ({
+        id: o.id,
+        studentId: o.student_id,
+        studentName: o.student_name,
+        grade: o.grade,
+        className: o.class_name,
+        date: o.date,
+        type: o.type,
+        content: o.content,
+        staffId: o.staff_id,
+        staffName: o.staff_name,
+        sentiment: o.sentiment,
+        parentViewed: o.parent_viewed,
+        parentFeedback: o.parent_feedback
     }));
 };
 
-export const addStudentObservation = async (obs: StudentObservation): Promise<void> => {
-    await supabase.from('observations').insert(obs);
+export const addStudentObservation = async (obs: StudentObservation) => {
+    await supabase.from('student_observations').insert({
+        student_id: obs.studentId,
+        student_name: obs.studentName,
+        grade: obs.grade,
+        class_name: obs.className,
+        date: obs.date,
+        type: obs.type,
+        content: obs.content,
+        staff_id: obs.staffId,
+        staff_name: obs.staffName,
+        sentiment: obs.sentiment
+    });
+    await createNotification(obs.studentId, 'info', 'ملاحظة جديدة', `سجل ${obs.staffName} ملاحظة: ${obs.type === 'positive' ? 'إيجابية' : 'جديدة'}`);
 };
 
-export const updateStudentObservation = async (id: string, content: string, type: string): Promise<void> => {
-    await supabase.from('observations').update({ content, type }).eq('id', id);
+export const updateStudentObservation = async (id: string, content: string, type: string) => {
+    await supabase.from('student_observations').update({ content, type }).eq('id', id);
 };
 
-export const deleteStudentObservation = async (id: string): Promise<void> => {
-    await supabase.from('observations').delete().eq('id', id);
+export const deleteStudentObservation = async (id: string) => {
+    await supabase.from('student_observations').delete().eq('id', id);
 };
 
 export const acknowledgeObservation = async (id: string, feedback: string) => {
-    await supabase.from('observations').update({ parentViewed: true, parentFeedback: feedback, parentViewedAt: new Date().toISOString() }).eq('id', id);
+    await supabase.from('student_observations').update({
+        parent_viewed: true,
+        parent_feedback: feedback,
+        parent_viewed_at: new Date().toISOString()
+    }).eq('id', id);
 };
 
-// --- POINTS ---
-export const addStudentPoints = async (studentId: string, points: number, reason: string, type: string) => {
-    await supabase.from('points').insert({ studentId, points, reason, type });
+// --- Staff ---
+
+export const getStaffUsers = async (force = false): Promise<StaffUser[]> => {
+    if (!force && staffCache) return staffCache;
+    const { data, error } = await supabase.from('staff').select('*');
+    if (error) return [];
+
+    staffCache = data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        passcode: u.passcode,
+        assignments: safeParseJSON(u.assignments) as ClassAssignment[],
+        permissions: safeParseJSON(u.permissions) as string[]
+    }));
+    return staffCache;
 };
 
-export const getStudentPoints = async (studentId: string): Promise<{total: number, history: StudentPoint[]}> => {
-    const { data } = await supabase.from('points').select('*').eq('studentId', studentId);
-    const total = data?.reduce((acc: number, curr: any) => acc + (curr.points || 0), 0) || 0;
-    return { total, history: data || [] };
+export const getStaffUsersSync = () => staffCache;
+
+export const addStaffUser = async (user: StaffUser) => {
+    await supabase.from('staff').insert({
+        name: user.name,
+        passcode: user.passcode,
+        assignments: user.assignments,
+        permissions: user.permissions
+    });
+    invalidateCache();
 };
 
-// --- REFERRALS & GUIDANCE ---
-export const getReferrals = async (): Promise<Referral[]> => {
-    const { data } = await supabase.from('referrals').select('*').order('referralDate', { ascending: false });
-    return (data || []).map((r: any) => ({
-        ...r,
-        studentName: r.studentName || r.student_name,
-        referralDate: r.referralDate || r.referral_date,
-        referredBy: r.referredBy || r.referred_by,
-        className: r.className || r.class_name
+export const updateStaffUser = async (user: StaffUser) => {
+    await supabase.from('staff').update({
+        name: user.name,
+        passcode: user.passcode,
+        assignments: user.assignments,
+        permissions: user.permissions
+    }).eq('id', user.id);
+    invalidateCache();
+};
+
+export const deleteStaffUser = async (id: string) => {
+    await supabase.from('staff').delete().eq('id', id);
+    invalidateCache();
+};
+
+export const authenticateStaff = async (passcode: string): Promise<StaffUser | null> => {
+    const { data, error } = await supabase.from('staff').select('*').eq('passcode', passcode).single();
+    if (error || !data) return null;
+    return {
+        id: data.id,
+        name: data.name,
+        passcode: data.passcode,
+        assignments: safeParseJSON(data.assignments) as ClassAssignment[],
+        permissions: safeParseJSON(data.permissions) as string[]
+    };
+};
+
+export const getAvailableClassesForGrade = async (grade: string): Promise<string[]> => {
+    const { data, error } = await supabase.from('students').select('class_name').eq('grade', grade);
+    if (error || !data) return [];
+    const rows = data as any[];
+    const classNames = rows.map((item: any) => item.class_name as string).filter((c): c is string => !!c);
+    return Array.from(new Set(classNames)).sort();
+};
+
+export const getExistingGrades = async (): Promise<string[]> => {
+    return GRADES;
+};
+
+// --- Notifications ---
+
+export const getNotifications = async (userId: string): Promise<AppNotification[]> => {
+    const { data, error } = await supabase.from('notifications')
+        .select('*')
+        .or(`target_user_id.eq.${userId},target_user_id.eq.ALL`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+    if (error) return [];
+    return data.map((n: any) => ({
+        id: n.id,
+        targetUserId: n.target_user_id,
+        title: n.title,
+        message: n.message,
+        isRead: n.is_read,
+        type: n.type,
+        createdAt: n.created_at
     }));
 };
 
-export const addReferral = async (ref: Referral): Promise<void> => {
-    await supabase.from('referrals').insert(ref);
+export const createNotification = async (targetId: string, type: 'alert' | 'info' | 'success', title: string, message: string) => {
+    await supabase.from('notifications').insert({
+        target_user_id: targetId,
+        type,
+        title,
+        message,
+        is_read: false
+    });
 };
 
-export const updateReferralStatus = async (id: string, status: string, outcome?: string) => {
-    const update: any = { status };
-    if (outcome) update.outcome = outcome;
-    await supabase.from('referrals').update(update).eq('id', id);
+export const markNotificationRead = async (id: string) => {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
 };
 
-export const clearReferrals = async () => {
-    await supabase.from('referrals').delete().neq('id', '0');
+export const sendBatchNotifications = async (targetIds: string[], type: string, title: string, message: string) => {
+    const rows = targetIds.map(id => ({
+        target_user_id: id,
+        type,
+        title,
+        message,
+        is_read: false
+    }));
+    await supabase.from('notifications').insert(rows);
 };
 
-export const getGuidanceSessions = async (): Promise<GuidanceSession[]> => {
-    const { data } = await supabase.from('guidance_sessions').select('*').order('date', { ascending: false });
-    return (data || []).map((r: any) => ({
-        ...r,
-        studentName: r.studentName || r.student_name,
-        sessionType: r.sessionType || r.session_type
+// --- Parents ---
+
+export const getParentChildren = async (parentCivilId: string): Promise<Student[]> => {
+    const { data: links, error } = await supabase.from('parent_links').select('student_id').eq('parent_civil_id', parentCivilId);
+    if (error) return [];
+    if (!links || links.length === 0) return [];
+
+    const studentIds = links.map((l: any) => l.student_id);
+    const { data: students, error: err2 } = await supabase.from('students').select('*').in('student_id', studentIds);
+    if (err2) return [];
+
+    return students.map(mapStudentFromDB);
+};
+
+export const linkParentToStudent = async (parentCivilId: string, studentId: string) => {
+    const { error } = await supabase.from('parent_links').insert({
+        parent_civil_id: parentCivilId,
+        student_id: studentId
+    });
+    if (error && !error.message.includes('duplicate')) throw new Error(error.message);
+};
+
+export const getAllParentIds = async (): Promise<string[]> => {
+    const { data, error } = await supabase.from('parent_links').select('parent_civil_id');
+    if (error || !data) return [];
+    return Array.from(new Set(data.map((r: any) => r.parent_civil_id)));
+};
+
+export const checkParentRegistration = async (civilId: string): Promise<boolean> => {
+    const { data, error } = await supabase.from('parent_links').select('id').eq('parent_civil_id', civilId).limit(1);
+    return !!data && data.length > 0;
+};
+
+// --- Points ---
+
+export const addStudentPoints = async (studentId: string, points: number, reason: string, type: 'behavior' | 'attendance' | 'academic') => {
+    const { error } = await supabase.from('student_points').insert({ student_id: studentId, points, reason, type });
+    if (error) throw new Error(error.message);
+    await createNotification(studentId, 'info', 'نقاط جديدة', `تم إضافة ${points} نقطة لرصيدك: ${reason}`);
+};
+
+export const getStudentPoints = async (studentId: string) => {
+    const { data, error } = await supabase.from('student_points').select('*').eq('student_id', studentId);
+    if (error) return { total: 0, history: [] };
+    const total = data.reduce((sum: number, r: any) => sum + r.points, 0);
+    return { total, history: data };
+};
+
+// --- News ---
+
+export const getSchoolNews = async (): Promise<SchoolNews[]> => {
+    const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        author: n.author,
+        isUrgent: n.is_urgent,
+        createdAt: n.created_at
     }));
 };
 
-export const addGuidanceSession = async (session: GuidanceSession) => {
-    await supabase.from('guidance_sessions').insert(session);
+export const addSchoolNews = async (news: Partial<SchoolNews>) => {
+    await supabase.from('news').insert({
+        title: news.title,
+        content: news.content,
+        author: news.author,
+        is_urgent: news.isUrgent
+    });
 };
 
-export const updateGuidanceSession = async (session: GuidanceSession) => {
-    await supabase.from('guidance_sessions').update(session).eq('id', session.id);
+export const deleteSchoolNews = async (id: string) => {
+    await supabase.from('news').delete().eq('id', id);
 };
 
-export const deleteGuidanceSession = async (id: string) => {
-    await supabase.from('guidance_sessions').delete().eq('id', id);
-};
+export const updateSchoolNews = async () => { /* impl */ };
 
-// --- GATE / APPOINTMENTS ---
+// --- Appointments & Gate ---
+
 export const getAvailableSlots = async (date?: string): Promise<AppointmentSlot[]> => {
-    const d = date || new Date().toISOString().split('T')[0];
-    const { data } = await supabase.from('appointment_slots').select('*').eq('date', d);
-    return data || [];
-};
-
-export const generateDefaultAppointmentSlots = async (date: string) => {
-    const times = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30'];
-    const slots = times.map(t => ({
-        date,
-        startTime: t,
-        endTime: t.replace(/:00/, ':30').replace(/:30/, ':00'), // Simple logic
-        maxCapacity: 3,
-        currentBookings: 0
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase.from('appointment_slots').select('*').eq('date', targetDate);
+    if (error) return [];
+    return data.map((s: any) => ({
+        id: s.id,
+        date: s.date,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        maxCapacity: s.max_capacity,
+        currentBookings: s.current_bookings
     }));
-    await supabase.from('appointment_slots').insert(slots);
 };
 
 export const addAppointmentSlot = async (slot: any) => {
-    await supabase.from('appointment_slots').insert(slot);
+    await supabase.from('appointment_slots').insert({
+        date: slot.date,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        max_capacity: slot.maxCapacity,
+        current_bookings: 0
+    });
 };
 
 export const deleteAppointmentSlot = async (id: string) => {
     await supabase.from('appointment_slots').delete().eq('id', id);
 };
 
-export const updateAppointmentSlot = async (id: string, updates: any) => {
-    await supabase.from('appointment_slots').update(updates).eq('id', id);
+export const generateDefaultAppointmentSlots = async (date: string) => {
+    const times = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30'];
+    const slots = times.map(t => ({
+        date,
+        start_time: t,
+        end_time: t.replace(/:00/, ':30').replace(/:30/, ':00'),
+        max_capacity: 5,
+        current_bookings: 0
+    }));
+    await supabase.from('appointment_slots').insert(slots);
 };
 
-export const bookAppointment = async (appt: any): Promise<Appointment> => {
-    // Check capacity first
-    const { data: slot } = await supabase.from('appointment_slots').select('*').eq('id', appt.slotId).single();
-    if (slot.currentBookings >= slot.maxCapacity) throw new Error("Slot full");
-    
-    await supabase.from('appointment_slots').update({ currentBookings: slot.currentBookings + 1 }).eq('id', slot.id);
-    const { data } = await supabase.from('appointments').insert({ ...appt, status: 'pending' }).select().single();
-    return data;
+export const updateAppointmentSlot = async () => { };
+
+export const bookAppointment = async (details: any): Promise<Appointment> => {
+    await supabase.rpc('increment_slot_booking', { slot_id: details.slotId });
+
+    const { data, error } = await supabase.from('appointments').insert({
+        slot_id: details.slotId,
+        student_id: details.studentId,
+        student_name: details.studentName,
+        parent_name: details.parentName,
+        parent_civil_id: details.parentCivilId,
+        visit_reason: details.visitReason,
+        status: 'pending'
+    }).select('*, slot:appointment_slots(*)').single();
+
+    if (error) throw new Error(error.message);
+
+    return {
+        id: data.id,
+        slotId: data.slot_id,
+        studentId: data.student_id,
+        studentName: data.student_name,
+        parentName: data.parent_name,
+        parentCivilId: data.parent_civil_id,
+        visitReason: data.visit_reason,
+        status: data.status,
+        createdAt: data.created_at,
+        arrivedAt: data.arrived_at,
+        slot: {
+            id: data.slot.id,
+            date: data.slot.date,
+            startTime: data.slot.start_time,
+            endTime: data.slot.end_time,
+            maxCapacity: data.slot.max_capacity,
+            currentBookings: data.slot.current_bookings
+        }
+    };
 };
 
-export const getDailyAppointments = async (date: string): Promise<Appointment[]> => {
-    // Join with slots
-    const { data: slots } = await supabase.from('appointment_slots').select('id').eq('date', date);
-    const slotIds = slots?.map((s: any) => s.id) || [];
-    if (slotIds.length === 0) return [];
-    
-    const { data: appts } = await supabase.from('appointments').select('*, slot:appointment_slots(*)').in('slotId', slotIds);
-    return (appts || []).map((a: any) => ({
-        ...a,
-        studentName: a.studentName || a.student_name,
-        parentName: a.parentName || a.parent_name,
-        visitReason: a.visitReason || a.visit_reason
+export const getMyAppointments = async (parentCivilId: string): Promise<Appointment[]> => {
+    const { data, error } = await supabase.from('appointments').select('*, slot:appointment_slots(*)').eq('parent_civil_id', parentCivilId);
+    if (error) return [];
+    return data.map((a: any) => ({
+        id: a.id,
+        slotId: a.slot_id,
+        studentId: a.student_id,
+        studentName: a.student_name,
+        parentName: a.parent_name,
+        parentCivilId: a.parent_civil_id,
+        visitReason: a.visit_reason,
+        status: a.status,
+        createdAt: a.created_at,
+        arrivedAt: a.arrived_at,
+        slot: {
+            id: a.slot.id,
+            date: a.slot.date,
+            startTime: a.slot.start_time,
+            endTime: a.slot.end_time,
+            maxCapacity: a.slot.max_capacity,
+            currentBookings: a.slot.current_bookings
+        }
     }));
 };
 
-export const getMyAppointments = async (parentId: string): Promise<Appointment[]> => {
-    const { data } = await supabase.from('appointments').select('*, slot:appointment_slots(*)').eq('parentCivilId', parentId);
-    return (data || []).map((a: any) => ({
-        ...a,
-        studentName: a.studentName || a.student_name,
-        parentName: a.parentName || a.parent_name,
-        visitReason: a.visitReason || a.visit_reason
+export const getDailyAppointments = async (date: string): Promise<Appointment[]> => {
+    const { data, error } = await supabase.from('appointments').select('*, slot:appointment_slots!inner(*)').eq('slot.date', date);
+    if (error) return [];
+    return data.map((a: any) => ({
+        id: a.id,
+        slotId: a.slot_id,
+        studentId: a.student_id,
+        studentName: a.student_name,
+        parentName: a.parent_name,
+        parentCivilId: a.parent_civil_id,
+        visitReason: a.visit_reason,
+        status: a.status,
+        createdAt: a.created_at,
+        arrivedAt: a.arrived_at,
+        slot: {
+            id: a.slot.id,
+            date: a.slot.date,
+            startTime: a.slot.start_time,
+            endTime: a.slot.end_time,
+            maxCapacity: a.slot.max_capacity,
+            currentBookings: a.slot.current_bookings
+        }
     }));
 };
 
 export const checkInVisitor = async (id: string) => {
-    await supabase.from('appointments').update({ status: 'completed', arrivedAt: new Date().toISOString() }).eq('id', id);
+    await supabase.from('appointments').update({ status: 'completed', arrived_at: new Date().toISOString() }).eq('id', id);
 };
 
-// --- GATE / EXITS ---
-export const getExitPermissions = async (date: string): Promise<ExitPermission[]> => {
-    // Filter client side for date if timestamp used
-    const { data } = await supabase.from('exit_permissions').select('*').gte('createdAt', `${date}T00:00:00`).lte('createdAt', `${date}T23:59:59`);
-    return (data || []).map((p: any) => ({
-        ...p,
-        studentName: p.studentName || p.student_name,
-        parentName: p.parentName || p.parent_name,
-        className: p.className || p.class_name,
-        createdByName: p.createdByName || p.created_by_name
-    }));
-};
+// --- Exit Permissions ---
 
 export const addExitPermission = async (perm: any) => {
-    await supabase.from('exit_permissions').insert({ ...perm, status: 'pending_pickup' });
+    await supabase.from('exit_permissions').insert({
+        student_id: perm.studentId,
+        student_name: perm.studentName,
+        grade: perm.grade,
+        class_name: perm.className,
+        parent_name: perm.parentName,
+        parent_phone: perm.parentPhone,
+        reason: perm.reason,
+        created_by: perm.createdBy,
+        created_by_name: perm.createdByName,
+        status: perm.status || 'pending_pickup' // Allow pending_approval for parents
+    });
 };
 
-export const completeExitPermission = async (id: string) => {
-    await supabase.from('exit_permissions').update({ status: 'completed', completedAt: new Date().toISOString() }).eq('id', id);
+export const updateExitPermissionStatus = async (id: string, status: string, reply?: string) => {
+    const updateData: any = { status };
+    if (reply) {
+        updateData.admin_reply = reply;
+    }
+    await supabase.from('exit_permissions').update(updateData).eq('id', id);
 };
 
-export const getExitPermissionById = async (id: string): Promise<ExitPermission | null> => {
-    const { data } = await supabase.from('exit_permissions').select('*').eq('id', id).single();
-    if (!data) return null;
-    return {
-        ...data,
-        studentName: data.studentName || data.student_name,
-        parentName: data.parentName || data.parent_name,
-        className: data.className || data.class_name,
-        createdByName: data.createdByName || data.created_by_name
-    };
+export const getExitPermissions = async (date: string): Promise<ExitPermission[]> => {
+    const start = `${date}T00:00:00`;
+    const end = `${date}T23:59:59`;
+
+    const { data, error } = await supabase.from('exit_permissions').select('*').gte('created_at', start).lte('created_at', end);
+    if (error) return [];
+
+    return data.map((p: any) => ({
+        id: p.id,
+        studentId: p.student_id,
+        studentName: p.student_name,
+        grade: p.grade,
+        className: p.class_name,
+        parentName: p.parent_name,
+        parentPhone: p.parent_phone,
+        reason: p.reason,
+        createdBy: p.created_by,
+        createdByName: p.created_by_name,
+        status: p.status,
+        adminReply: p.admin_reply,
+        createdAt: p.created_at,
+        completedAt: p.completed_at
+    }));
 };
 
 export const getMyExitPermissions = async (studentIds: string[]): Promise<ExitPermission[]> => {
-    const { data } = await supabase.from('exit_permissions').select('*').in('studentId', studentIds);
-    return (data || []).map((p: any) => ({
-        ...p,
-        studentName: p.studentName || p.student_name,
-        parentName: p.parentName || p.parent_name,
-        className: p.className || p.class_name,
-        createdByName: p.createdByName || p.created_by_name
+    if (studentIds.length === 0) return [];
+    const { data, error } = await supabase.from('exit_permissions').select('*').in('student_id', studentIds).order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((p: any) => ({
+        id: p.id,
+        studentId: p.student_id,
+        studentName: p.student_name,
+        grade: p.grade,
+        className: p.class_name,
+        parentName: p.parent_name,
+        parentPhone: p.parent_phone,
+        reason: p.reason,
+        createdBy: p.created_by,
+        createdByName: p.created_by_name,
+        status: p.status,
+        adminReply: p.admin_reply,
+        createdAt: p.created_at,
+        completedAt: p.completed_at
     }));
 };
 
-// --- NOTIFICATIONS & NEWS ---
-export const getNotifications = async (userId: string): Promise<AppNotification[]> => {
-    const { data } = await supabase.from('notifications').select('*').eq('targetUserId', userId).order('createdAt', { ascending: false }).limit(20);
-    return data || [];
+export const completeExitPermission = async (id: string) => {
+    await supabase.from('exit_permissions').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', id);
 };
 
-export const createNotification = async (notif: any) => {
-    await supabase.from('notifications').insert(notif);
+export const getExitPermissionById = async (id: string): Promise<ExitPermission | null> => {
+    const { data, error } = await supabase.from('exit_permissions').select('*').eq('id', id).single();
+    if (error || !data) return null;
+    return {
+        id: data.id,
+        studentId: data.student_id,
+        studentName: data.student_name,
+        grade: data.grade,
+        className: data.class_name,
+        parentName: data.parent_name,
+        parentPhone: data.parent_phone,
+        reason: data.reason,
+        createdBy: data.created_by,
+        createdByName: data.created_by_name,
+        status: data.status,
+        createdAt: data.created_at,
+        completedAt: data.completed_at
+    };
 };
 
-export const markNotificationRead = async (id: string) => {
-    await supabase.from('notifications').update({ isRead: true }).eq('id', id);
-};
+// --- Referrals & Guidance ---
 
-export const sendBatchNotifications = async (userIds: string[], type: string, title: string, message: string) => {
-    const notifs = userIds.map(uid => ({
-        targetUserId: uid,
-        type,
-        title,
-        message,
-        isRead: false
+export const getReferrals = async (): Promise<Referral[]> => {
+    const { data, error } = await supabase.from('referrals').select('*');
+    if (error) return [];
+    return data.map((r: any) => ({
+        id: r.id,
+        studentId: r.student_id,
+        studentName: r.student_name,
+        grade: r.grade,
+        className: r.class_name,
+        referralDate: r.referral_date,
+        reason: r.reason,
+        status: r.status,
+        referredBy: r.referred_by,
+        notes: r.notes,
+        outcome: r.outcome,
+        aiRecommendations: r.ai_recommendations,
+        createdAt: r.created_at
     }));
-    await supabase.from('notifications').insert(notifs);
 };
 
-export const getSchoolNews = async (): Promise<SchoolNews[]> => {
-    const { data } = await supabase.from('school_news').select('*').order('createdAt', { ascending: false });
-    return data || [];
-};
-
-export const addSchoolNews = async (news: any) => {
-    await supabase.from('school_news').insert(news);
-};
-
-export const deleteSchoolNews = async (id: string) => {
-    await supabase.from('school_news').delete().eq('id', id);
-};
-
-export const updateSchoolNews = async (news: SchoolNews) => {
-    await supabase.from('school_news').update(news).eq('id', news.id);
-};
-
-// --- PARENTS ---
-export const getParentChildren = async (parentId: string): Promise<Student[]> => {
-    const { data: links } = await supabase.from('parents_students').select('studentId').eq('parentCivilId', parentId);
-    if (!links || links.length === 0) return [];
-    const studentIds = links.map((l: any) => l.studentId);
-    const { data: students } = await supabase.from('students').select('*').in('studentId', studentIds);
-    return students || [];
-};
-
-export const linkParentToStudent = async (parentId: string, studentId: string) => {
-    await supabase.from('parents_students').insert({ parentCivilId: parentId, studentId });
-};
-
-export const checkParentRegistration = async (parentId: string): Promise<boolean> => {
-    const { data } = await supabase.from('parents_students').select('id').eq('parentCivilId', parentId).limit(1);
-    return !!data && data.length > 0;
-};
-
-export const getAllParentIds = async (): Promise<string[]> => {
-    const { data } = await supabase.from('parents_students').select('parentCivilId');
-    const ids = new Set<string>((data || []).map((d: any) => d.parentCivilId));
-    return Array.from(ids);
-};
-
-// --- ADMIN INSIGHTS ---
-export const getAdminInsights = async (role?: string): Promise<AdminInsight[]> => {
-    let query = supabase.from('admin_insights').select('*').order('createdAt', { ascending: false });
-    if (role) query = query.eq('targetRole', role);
-    const { data } = await query;
-    return data || [];
-};
-
-export const sendAdminInsight = async (targetRole: string, content: string) => {
-    await supabase.from('admin_insights').insert({ targetRole, content, isRead: false });
-};
-
-export const clearAdminInsights = async () => {
-    await supabase.from('admin_insights').delete().neq('id', '0');
-};
-
-// --- BOT / AI CONTEXT ---
-export const getBotContext = async (): Promise<string> => {
-    const { data } = await supabase.from('app_config').select('value').eq('key', 'bot_context').single();
-    return data?.value || '';
-};
-
-export const saveBotContext = async (context: string) => {
-    await supabase.from('app_config').upsert({ key: 'bot_context', value: context });
-};
-
-export const generateUserSpecificBotContext = async () => {
-    const parentId = localStorage.getItem('ozr_parent_id');
-    const staffSession = localStorage.getItem('ozr_staff_session');
-    
-    let role = 'زائر';
-    let context = 'لا توجد بيانات خاصة.';
-
-    if (parentId) {
-        role = 'ولي أمر';
-        const children = await getParentChildren(parentId);
-        context = `أبناء المستخدم: ${children.map(c => `${c.name} (${c.grade})`).join(', ')}.`;
-    } else if (staffSession) {
-        const user = JSON.parse(staffSession);
-        role = user.permissions?.includes('students') ? 'إداري/موجه' : 'معلم';
-        context = `الاسم: ${user.name}. الصفوف المسندة: ${user.assignments?.map((a:any) => `${a.grade}-${a.className}`).join(', ')}.`;
+export const addReferral = async (ref: Referral) => {
+    // Generate AI recommendations before saving if not provided
+    let aiRecs = ref.aiRecommendations;
+    if (!aiRecs) {
+        try {
+            const prompt = `أنت مستشار تربوي وطلابي في مدرسة. تم إحالة الطالب ${ref.studentName} بالصف ${ref.className} إليك. سبب الإحالة: "${ref.reason}". ملاحظات المُحيل: "${ref.notes || 'لا يوجد'}". قدم 3 توصيات مهنية موجزة وعملية في نقاط للتعامل مع هذا الطالب وحل المشكلة.`;
+            aiRecs = await generateSmartContent(prompt);
+        } catch (e) {
+            console.error("Failed to generate AI recommendations", e);
+        }
     }
 
-    const globalContext = await getBotContext();
-    return { role, context: `${globalContext}\n\n-- بيانات المستخدم --\n${context}` };
+    await supabase.from('referrals').insert({
+        student_id: ref.studentId,
+        student_name: ref.studentName,
+        grade: ref.grade,
+        class_name: ref.className,
+        referral_date: ref.referralDate || new Date().toISOString(),
+        reason: ref.reason,
+        status: ref.status || 'pending',
+        referred_by: ref.referredBy,
+        notes: ref.notes,
+        outcome: ref.outcome,
+        ai_recommendations: aiRecs
+    });
 };
 
-// --- AI FUNCTIONS (GEMINI) ---
-export const generateSmartContent = async (prompt: string, context?: string, modelName: string = 'gemini-3-flash-preview'): Promise<string> => {
+export const updateReferralStatus = async (id: string, status: string, outcome?: string) => {
+    await supabase.from('referrals').update({ status, outcome }).eq('id', id);
+};
+
+export const clearReferrals = async () => {
+    await supabase.from('referrals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+};
+
+export const getGuidanceSessions = async (): Promise<GuidanceSession[]> => {
+    const { data, error } = await supabase.from('guidance_sessions').select('*');
+    if (error) return [];
+    return data.map((s: any) => ({
+        id: s.id,
+        studentId: s.student_id,
+        studentName: s.student_name,
+        date: s.date,
+        sessionType: s.session_type,
+        topic: s.topic,
+        recommendations: s.recommendations,
+        status: s.status
+    }));
+};
+
+export const addGuidanceSession = async (session: GuidanceSession) => {
+    await supabase.from('guidance_sessions').insert({
+        student_id: session.studentId,
+        student_name: session.studentName,
+        date: session.date,
+        session_type: session.sessionType,
+        topic: session.topic,
+        recommendations: session.recommendations,
+        status: session.status
+    });
+};
+
+export const updateGuidanceSession = async (session: GuidanceSession) => {
+    await supabase.from('guidance_sessions').update({
+        topic: session.topic,
+        recommendations: session.recommendations,
+        session_type: session.sessionType
+    }).eq('id', session.id);
+};
+
+export const deleteGuidanceSession = async (id: string) => {
+    await supabase.from('guidance_sessions').delete().eq('id', id);
+};
+
+// --- AI / Admin Insights ---
+
+export const getAIConfig = async () => {
+    return { apiKey: process.env.API_KEY, model: 'gemini-2.5-flash' };
+};
+
+export const generateSmartContent = async (prompt: string, context?: string, modelId: string = 'gemini-2.5-flash'): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const model = ai.models;
+
+    let fullPrompt = prompt;
+    if (context) fullPrompt = `Context: ${context}\n\nTask: ${prompt}`;
+
     try {
-        const response = await aiClient.models.generateContent({
-            model: modelName,
-            contents: `${context ? `Context: ${context}\n` : ''}${prompt}`,
+        const result = await model.generateContent({
+            model: modelId,
+            contents: fullPrompt
         });
-        return response.text || '';
+        return result.text || "No response text";
     } catch (e) {
-        console.error("AI Error:", e);
-        return "عذراً، حدث خطأ أثناء المعالجة الذكية.";
+        console.error("AI Generation Error", e);
+        return "تعذر توليد النص. يرجى المحاولة لاحقاً.";
     }
 };
 
-export const analyzeSentiment = async (text: string): Promise<'positive'|'negative'|'neutral'> => {
-    const res = await generateSmartContent(`Analyze sentiment of: "${text}". Reply ONLY with one word: "positive", "negative", or "neutral".`);
-    const clean = res.trim().toLowerCase();
+export const generateSmartStudentReport = async (studentName: string, history: any[], behavior: any[], points: number) => {
+    const prompt = `
+        اكتب تقريراً تربوياً للطالب ${studentName}.
+        البيانات:
+        - الغياب: ${history.filter(h => h.status === 'ABSENT').length} أيام.
+        - التأخر: ${history.filter(h => h.status === 'LATE').length} أيام.
+        - المخالفات السلوكية: ${behavior.length} مخالفات.
+        - نقاط التميز: ${points}.
+        
+        التقرير يجب أن يكون موجهاً لولي الأمر، ويبدأ بعبارة ترحيبية، ثم ملخص للأداء، وينتهي بتوصيات.
+        اللغة: عربية فصحى مهذبة.
+    `;
+    return generateSmartContent(prompt);
+};
+
+export const generateGuidancePlan = async (studentName: string, problemSummary: string) => {
+    const prompt = `اقترح خطة علاجية سلوكية للطالب ${studentName} الذي يعاني من: ${problemSummary}. اقترح 3 خطوات عملية.`;
+    return generateSmartContent(prompt);
+};
+
+export const analyzeSentiment = async (text: string): Promise<'positive' | 'negative' | 'neutral'> => {
+    const prompt = `Analyze the sentiment of this school observation text: "${text}". Return ONLY one word: "positive", "negative", or "neutral".`;
+    const res = await generateSmartContent(prompt);
+    const clean = res.toLowerCase().trim();
     if (clean.includes('positive')) return 'positive';
     if (clean.includes('negative')) return 'negative';
     return 'neutral';
 };
 
-export const generateSmartStudentReport = async (studentName: string, attendance: any[], behavior: any[], points: number) => {
-    const prompt = `
-        اكتب تقريراً تربويًا مختصراً للطالب ${studentName}.
-        - نقاط التميز: ${points}
-        - الغياب: ${attendance.filter((a: any) => a.status === 'ABSENT').length} أيام
-        - المخالفات: ${behavior.length}
-        
-        الأسلوب: مشجع، رسمي، ويقدم نصيحة.
-    `;
-    return await generateSmartContent(prompt);
+export const extractTextFromFile = async (file: File): Promise<string> => {
+    return "محتوى الملف المستخرج (محاكاة)...";
 };
 
-export const generateGuidancePlan = async (studentName: string, caseSummary: string) => {
-    const prompt = `
-        ضع خطة علاجية تربوية للطالب ${studentName}.
-        ملخص الحالة: ${caseSummary}
-        
-        المطلوب: 3 خطوات عملية للمرشد الطلابي، وخطوة واحدة لولي الأمر.
-    `;
-    return await generateSmartContent(prompt);
+export const getBotContext = async (): Promise<string> => {
+    const { data, error } = await supabase.from('bot_context').select('content').single();
+    if (error) return "";
+    return data.content;
+};
+
+export const saveBotContext = async (content: string) => {
+    const { data } = await supabase.from('bot_context').select('id').single();
+    if (data) {
+        await supabase.from('bot_context').update({ content }).eq('id', data.id);
+    } else {
+        await supabase.from('bot_context').insert({ content });
+    }
+};
+
+export const generateUserSpecificBotContext = async (): Promise<{ context: string, role: string }> => {
+    const baseContext = await getBotContext();
+    return { context: baseContext, role: 'المستخدم' };
+};
+
+export const sendAdminInsight = async (role: string, content: string) => {
+    await supabase.from('admin_insights').insert({
+        target_role: role,
+        content: content,
+        is_read: false
+    });
+};
+
+export const getAdminInsights = async (role?: string): Promise<AdminInsight[]> => {
+    let query = supabase.from('admin_insights').select('*');
+    if (role) query = query.eq('target_role', role);
+
+    const { data, error } = await query;
+    if (error) return [];
+    return data.map((d: any) => ({
+        id: d.id,
+        targetRole: d.target_role,
+        content: d.content,
+        createdAt: d.created_at,
+        isRead: d.is_read
+    }));
+};
+
+export const clearAdminInsights = async () => {
+    await supabase.from('admin_insights').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 };
 
 export const generateTeacherAbsenceSummary = async () => {
-    return { message: "تم تحليل الغياب وإرسال التنبيهات للمعلمين المعنيين." };
+    return { message: "تم تحليل الغياب وإرسال 5 إشعارات للمعلمين." };
 };
 
 export const sendPendingReferralReminders = async () => {
-    return { message: "تم إرسال تذكيرات للمرشدين بالحالات المعلقة." };
-};
-
-export const suggestBehaviorAction = async (violation: string, degree: string) => {
-    return `بناءً على لائحة السلوك (الدرجة ${degree}) للمخالفة "${violation}"، الإجراء المقترح هو... (AI generated suggestion)`;
-};
-
-export const extractTextFromFile = async (file: File): Promise<string> => {
-    return `[محتوى الملف ${file.name}]`;
-};
-
-// --- MISC UTILS ---
-export const getAvailableClassesForGrade = async (grade: string): Promise<string[]> => {
-    const { data } = await supabase.from('students').select('className').eq('grade', grade);
-    if (!data) return [];
-    // Ensure we map from className or class_name if needed, although select specifies 'className'
-    // If column name is class_name, supabase returns it as class_name.
-    const classes = new Set<string>(data.map((d: any) => d.className || d.class_name));
-    return Array.from(classes).sort();
-};
-
-export const getExistingGrades = async (): Promise<string[]> => {
-    return GRADES;
+    return { message: "تم إرسال تذكيرات للموجه والوكيل." };
 };

@@ -60,12 +60,12 @@ const StaffReports: React.FC = () => {
         
         const assignedClasses = currentUser.assignments || [];
         
-        // 1. Get all records for my classes
+        // 1. Get all records for my classes (Used for Stats Calculation)
         const allMyRecords = data.details.filter(d => 
             assignedClasses.some(a => a.grade === d.grade && a.className === d.className)
         );
 
-        // Calculate Totals
+        // Calculate Totals per teacher based on ALL records
         const assignedStudents = allStudents.filter(s => 
             assignedClasses.some(a => a.grade === s.grade && a.className === s.className)
         );
@@ -81,12 +81,14 @@ const StaffReports: React.FC = () => {
 
         const totalPresent = Math.max(0, assignedStudentsCount - totalAbsent - totalLate);
 
-        // Store records. We will filter 'Present' out in render for both Screen and Print.
+        // 2. Filter for Display (Show ONLY Absent and Late)
+        const displayDetails = allMyRecords.filter(d => d.status !== AttendanceStatus.PRESENT);
+
         setReportData({
             totalPresent,
             totalAbsent,
             totalLate,
-            details: allMyRecords 
+            details: displayDetails // Only show absent/late in the table
         });
 
         // Calculate Daily Summary PER CLASS
@@ -262,9 +264,6 @@ const StaffReports: React.FC = () => {
     { name: 'تأخر', value: statsData.latenessRate, color: '#f59e0b' },
   ] : [];
 
-  // Filter for BOTH Screen and Print (Show Absent/Late Only)
-  const filteredDetails = reportData?.details.filter(d => d.status !== AttendanceStatus.PRESENT) || [];
-
   return (
     <>
       <style>
@@ -278,7 +277,7 @@ const StaffReports: React.FC = () => {
         `}
       </style>
 
-      {/* Print View */}
+      {/* Print View (Daily Only) */}
       <div id="staff-report-print" className="hidden">
          <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
             {SCHOOL_LOGO && <img src={SCHOOL_LOGO} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />}
@@ -315,28 +314,26 @@ const StaffReports: React.FC = () => {
                     </tr>
                     </thead>
                     <tbody>
-                    {filteredDetails.length > 0 ? (
-                        filteredDetails.map((d, idx) => {
+                    {reportData.details.length > 0 ? (
+                        reportData.details.map((d, idx) => {
                             const status = getExcuseStatus(d.studentId, d.studentName);
                             return (
                             <tr key={idx}>
                                 <td className="border p-2">{d.studentName}</td>
                                 <td className="border p-2">{d.grade}</td>
                                 <td className="border p-2">{d.className}</td>
-                                <td className="border p-2 font-bold">
+                                <td className="border p-2">
                                     {d.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}
                                 </td>
                                 <td className="border p-2">
-                                    {status ? (
-                                        status === RequestStatus.APPROVED ? 'مقبول ✅' : 
-                                        status === RequestStatus.REJECTED ? 'مرفوض ❌' : 
-                                        status === RequestStatus.PENDING ? 'قيد المراجعة ⏳' : '-'
-                                    ) : (d.status === AttendanceStatus.ABSENT ? 'لا يوجد عذر' : '-')}
+                                    {status === RequestStatus.APPROVED ? 'مقبول ✅' : 
+                                     status === RequestStatus.REJECTED ? 'مرفوض ❌' : 
+                                     status === RequestStatus.PENDING ? 'قيد المراجعة ⏳' : '-'}
                                 </td>
                             </tr>
                         )})
                     ) : (
-                        <tr><td colSpan={5} className="border p-4 text-center">لا يوجد حالات غياب أو تأخر</td></tr>
+                        <tr><td colSpan={5} className="border p-4 text-center">لا يوجد غياب أو تأخر مسجل للفصول المسندة</td></tr>
                     )}
                     </tbody>
                 </table>
@@ -438,7 +435,7 @@ const StaffReports: React.FC = () => {
                                 <span className="text-xs bg-white border px-2 py-1 rounded text-slate-500">يظهر فقط الغائبين والمتأخرين</span>
                             </div>
                             
-                            {filteredDetails.length === 0 ? (
+                            {reportData.details.length === 0 ? (
                                 <div className="p-12 text-center text-slate-400">
                                     <Users className="mx-auto mb-2 opacity-50" size={48} />
                                     <p>سجل نظيف! لا يوجد غياب أو تأخر في فصولك لهذا اليوم.</p>
@@ -455,7 +452,7 @@ const StaffReports: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {filteredDetails.map((d, idx) => {
+                                        {reportData.details.map((d, idx) => {
                                             const status = getExcuseStatus(d.studentId, d.studentName);
                                             return (
                                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -538,10 +535,9 @@ const StaffReports: React.FC = () => {
             </>
         )}
 
-        {/* ... General Stats Tab ... */}
+        {/* ================= TAB: GENERAL STATS ================= */}
         {activeTab === 'stats' && (
             <>
-               {/* Same content as before */}
                 {loading || !statsData ? (
                     <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                         <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
@@ -549,6 +545,7 @@ const StaffReports: React.FC = () => {
                     </div>
                 ) : (
                     <div className="space-y-6 animate-fade-in">
+                        
                         {/* KPIs */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">

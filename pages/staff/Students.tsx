@@ -275,11 +275,7 @@ const StaffStudents: React.FC = () => {
   
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
-        // Safe check for undefined properties
-        const name = s.name || '';
-        const sid = s.studentId || '';
-        const phone = s.phone || '';
-        const matchesSearch = name.includes(searchTerm) || sid.includes(searchTerm) || phone.includes(searchTerm);
+        const matchesSearch = s.name.includes(searchTerm) || s.studentId.includes(searchTerm) || s.phone.includes(searchTerm);
         const matchesGrade = filterGrade ? s.grade === filterGrade : true;
         return matchesSearch && matchesGrade;
     });
@@ -295,8 +291,6 @@ const StaffStudents: React.FC = () => {
   if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-purple-600"/></div>;
 
   return (
-    // ... JSX ...
-    // (Rest of the JSX content remains exactly the same as in the original file, just using the safely filtered list)
     <>
     {/* PRINT TEMPLATES */}
     <div id="print-area" className="hidden" dir="rtl">
@@ -659,7 +653,7 @@ const StaffStudents: React.FC = () => {
                                     <div className="bg-white p-4 rounded-xl shadow-sm inline-block mb-4">
                                         {/* QR Code that triggers a phone call */}
                                         <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=tel:${selectedStudent.phone ? selectedStudent.phone.replace(/^0+/, '+966') : ''}`} 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=tel:${selectedStudent.phone.replace(/^0+/, '+966')}`} 
                                             alt="Call QR" 
                                             className="w-48 h-48 mx-auto"
                                         />

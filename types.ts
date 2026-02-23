@@ -26,6 +26,8 @@ export interface ExcuseRequest {
   attachmentName?: string;
   attachmentUrl?: string;
   status: RequestStatus;
+  adminReply?: string; // New field for admin's AI or manual reply
+  closedAt?: string;   // New field for workflow closure timestamp
 }
 
 export interface DashboardStats {
@@ -118,6 +120,7 @@ export interface Referral {
   referredBy: 'admin' | 'deputy' | 'teacher';
   notes?: string;
   outcome?: string; // Result from counselor
+  aiRecommendations?: string; // AI Suggested steps to resolve
   createdAt?: string;
 }
 
@@ -224,8 +227,9 @@ export interface ExitPermission {
   parentPhone: string;
   reason?: string;
   createdBy: string;
-  createdByName?: string; // New: Authorizer Name
-  status: 'pending_pickup' | 'completed' | 'expired';
+  createdByName?: string; // Authorizer Name
+  status: 'pending_approval' | 'pending_pickup' | 'completed' | 'expired' | 'rejected';
+  adminReply?: string; // Reason for rejection
   createdAt: string;
   completedAt?: string;
 }

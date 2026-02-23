@@ -6,13 +6,35 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Cairo', sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
-  margin: 0;
-  padding: 0;
-  direction: rtl;
+@layer base {
+  body {
+    font-family: 'Cairo', sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    margin: 0;
+    padding: 0;
+    direction: rtl;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-lg border border-white/20 shadow-xl;
+  }
+  .glass-dark {
+    @apply bg-slate-900/70 backdrop-blur-lg border border-slate-700/50 shadow-xl;
+  }
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)];
+  }
+  .glass-panel {
+    @apply bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600;
+  }
 }
 
 /* Fix Select Dropdowns text color */
@@ -23,18 +45,30 @@ select option {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseSlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
 .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
 .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+.animate-pulse-slow { animation: pulseSlow 3s infinite; }
+.animate-blob { animation: blob 7s infinite; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
 
 /* Floating Dock Animation */
 .floating-dock button {

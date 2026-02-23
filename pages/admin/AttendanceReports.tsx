@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Printer, Loader2, Sparkles, Send, FileSpreadsheet, AlertCircle, CheckCircle, FileText, X, User } from 'lucide-react';
 import { getDailyAttendanceReport, generateSmartContent, sendAdminInsight, getRequests } from '../../services/storage';
 import { AttendanceStatus, RequestStatus, ExcuseRequest } from '../../types';
@@ -87,29 +86,6 @@ const AttendanceReports: React.FC = () => {
       return req ? req.status : null;
   };
 
-  // Filter to show only Absent and Late
-  const filteredDetails = reportData?.details.filter(item => item.status !== AttendanceStatus.PRESENT) || [];
-
-  // Calculate Class Summary
-  const classSummary = useMemo(() => {
-      if (!reportData?.details) return [];
-      
-      const summary: Record<string, { grade: string, className: string, total: number, present: number, absent: number, late: number }> = {};
-
-      reportData.details.forEach(d => {
-          const key = `${d.grade}-${d.className}`;
-          if (!summary[key]) {
-              summary[key] = { grade: d.grade, className: d.className, total: 0, present: 0, absent: 0, late: 0 };
-          }
-          summary[key].total++;
-          if (d.status === AttendanceStatus.PRESENT) summary[key].present++;
-          if (d.status === AttendanceStatus.ABSENT) summary[key].absent++;
-          if (d.status === AttendanceStatus.LATE) summary[key].late++;
-      });
-
-      return Object.values(summary).sort((a, b) => a.grade.localeCompare(b.grade) || a.className.localeCompare(b.className));
-  }, [reportData]);
-
   return (
     <div className="space-y-8 animate-fade-in">
         
@@ -134,7 +110,7 @@ const AttendanceReports: React.FC = () => {
 
             {/* Title & Date */}
             <div className="text-center mb-6">
-                <h1 className="text-xl font-bold border-b-2 border-black inline-block pb-1">تقرير الغياب والتأخر اليومي</h1>
+                <h1 className="text-xl font-bold border-b-2 border-black inline-block pb-1">تقرير الغياب اليومي</h1>
                 <p className="text-lg font-mono font-bold mt-2">{selectedDate}</p>
             </div>
 
@@ -156,7 +132,7 @@ const AttendanceReports: React.FC = () => {
                 </div>
             )}
 
-            {/* Main Table (Absent/Late Only) */}
+            {/* Main Table */}
             {reportData && (
                 <table className="w-full text-right border-collapse">
                     <thead>
@@ -169,14 +145,14 @@ const AttendanceReports: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredDetails.length === 0 ? (
+                        {reportData.details.length === 0 ? (
                             <tr>
                                 <td colSpan={5} className="p-8 text-center font-bold">
-                                    لا يوجد حالات غياب أو تأخر مسجلة لهذا اليوم.
+                                    سجل نظيف! لا يوجد غياب أو تأخر مسجل اليوم.
                                 </td>
                             </tr>
                         ) : (
-                            filteredDetails.map((item, index) => {
+                            reportData.details.map((item, index) => {
                                 const excuseStatus = getExcuseStatus(item.studentId, item.studentName);
                                 return (
                                 <tr key={index}>
@@ -186,53 +162,18 @@ const AttendanceReports: React.FC = () => {
                                         <div className="text-[10px] mt-1">{item.studentId}</div>
                                     </td>
                                     <td>{item.grade} - {item.className}</td>
-                                    <td className="font-bold">
-                                        {item.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}
-                                    </td>
+                                    <td>{item.status === AttendanceStatus.ABSENT ? 'غياب' : 'تأخر'}</td>
                                     <td>
                                         {excuseStatus ? (
                                             excuseStatus === RequestStatus.APPROVED ? 'مقبول' :
                                             excuseStatus === RequestStatus.REJECTED ? 'مرفوض' : 'قيد المراجعة'
-                                        ) : (item.status === AttendanceStatus.ABSENT ? 'لا يوجد عذر' : '-')}
+                                        ) : 'لا يوجد عذر'}
                                     </td>
                                 </tr>
                             )})
                         )}
                     </tbody>
                 </table>
-            )}
-
-            {/* Class Summary Table (Print View) */}
-            {classSummary.length > 0 && (
-                <div className="mt-8 page-break-inside-avoid">
-                    <h3 className="font-bold text-lg mb-4 border-b border-black inline-block pb-1">ملخص الفصول اليومي</h3>
-                    <table className="w-full text-right border-collapse text-sm">
-                        <thead>
-                            <tr className="bg-gray-100">
-                                <th className="border border-black p-2">الصف / الفصل</th>
-                                <th className="border border-black p-2 text-center">العدد الكلي</th>
-                                <th className="border border-black p-2 text-center">حضور</th>
-                                <th className="border border-black p-2 text-center">غياب</th>
-                                <th className="border border-black p-2 text-center">تأخر</th>
-                                <th className="border border-black p-2 text-center">نسبة الحضور</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {classSummary.map((cls, idx) => (
-                                <tr key={idx}>
-                                    <td className="border border-black p-2 font-bold">{cls.grade} - {cls.className}</td>
-                                    <td className="border border-black p-2 text-center">{cls.total}</td>
-                                    <td className="border border-black p-2 text-center">{cls.present}</td>
-                                    <td className="border border-black p-2 text-center">{cls.absent}</td>
-                                    <td className="border border-black p-2 text-center">{cls.late}</td>
-                                    <td className="border border-black p-2 text-center font-bold">
-                                        {cls.total > 0 ? Math.round((cls.present / cls.total) * 100) : 0}%
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
             )}
 
             {/* Footer */}
@@ -251,7 +192,7 @@ const AttendanceReports: React.FC = () => {
             </div>
         </div>
 
-        {/* SCREEN UI */}
+        {/* SCREEN UI (NO CHANGES TO LOGIC) */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
             <div>
                 <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
@@ -339,10 +280,6 @@ const AttendanceReports: React.FC = () => {
 
                 {/* Detailed Table */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700 text-sm">قائمة الغياب والتأخر</h3>
-                        <span className="text-xs bg-white px-2 py-1 rounded border text-slate-500">يظهر الغائبين والمتأخرين فقط</span>
-                    </div>
                     <table className="w-full text-right border-collapse">
                         <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase border-b border-slate-200">
                             <tr>
@@ -353,15 +290,15 @@ const AttendanceReports: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm">
-                            {filteredDetails.length === 0 ? (
+                            {reportData.details.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="p-12 text-center text-slate-400 font-bold flex flex-col items-center justify-center">
                                         <CheckCircle size={48} className="mb-2 text-emerald-200"/>
-                                        لا يوجد حالات غياب أو تأخر مسجلة لهذا اليوم.
+                                        سجل نظيف! لا يوجد غياب أو تأخر مسجل اليوم.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredDetails.map((item, index) => {
+                                reportData.details.map((item, index) => {
                                     const excuseStatus = getExcuseStatus(item.studentId, item.studentName);
                                     return (
                                     <tr key={index} className="hover:bg-blue-50/30 transition-colors group">
@@ -388,7 +325,7 @@ const AttendanceReports: React.FC = () => {
                                                 ? 'bg-red-50 text-red-700 border border-red-100' 
                                                 : 'bg-amber-50 text-amber-700 border border-amber-100'
                                             }`}>
-                                                {item.status === AttendanceStatus.ABSENT ? 'غائب' : 'متأخر'}
+                                                {item.status === AttendanceStatus.ABSENT ? 'غياب' : 'تأخر'}
                                             </span>
                                         </td>
                                         <td className="p-4">
@@ -402,9 +339,7 @@ const AttendanceReports: React.FC = () => {
                                                      excuseStatus === RequestStatus.REJECTED ? 'مرفوض' : 'قيد المراجعة'}
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 text-xs px-2 py-1 bg-slate-50 rounded border border-slate-100">
-                                                    {item.status === AttendanceStatus.ABSENT ? 'لا يوجد عذر' : '-'}
-                                                </span>
+                                                <span className="text-slate-400 text-xs px-2 py-1 bg-slate-50 rounded border border-slate-100">لا يوجد عذر</span>
                                             )}
                                         </td>
                                     </tr>
@@ -413,49 +348,6 @@ const AttendanceReports: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
-
-                {/* Class Summary Widget (Screen View) */}
-                {classSummary.length > 0 && (
-                    <div className="mt-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50">
-                            <h3 className="font-bold text-slate-700 text-sm">ملخص الفصول اليومي</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-right text-sm">
-                                <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase">
-                                    <tr>
-                                        <th className="p-3">الفصل</th>
-                                        <th className="p-3 text-center">العدد</th>
-                                        <th className="p-3 text-center text-emerald-600">حضور</th>
-                                        <th className="p-3 text-center text-red-600">غياب</th>
-                                        <th className="p-3 text-center text-amber-600">تأخر</th>
-                                        <th className="p-3 text-center">النسبة</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {classSummary.map((cls, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50">
-                                            <td className="p-3 font-bold text-slate-800">{cls.grade} - {cls.className}</td>
-                                            <td className="p-3 text-center font-mono">{cls.total}</td>
-                                            <td className="p-3 text-center font-mono text-emerald-600 font-bold">{cls.present}</td>
-                                            <td className="p-3 text-center font-mono text-red-600 font-bold">{cls.absent}</td>
-                                            <td className="p-3 text-center font-mono text-amber-600 font-bold">{cls.late}</td>
-                                            <td className="p-3 text-center">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                                    (cls.present/cls.total) >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
-                                                    (cls.present/cls.total) >= 0.8 ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-red-100 text-red-700'
-                                                }`}>
-                                                    {Math.round((cls.present / cls.total) * 100)}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
             </div>
         )}
     </div>

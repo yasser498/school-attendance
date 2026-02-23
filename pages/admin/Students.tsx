@@ -62,14 +62,9 @@ const Students: React.FC = () => {
   const handleRefresh = () => fetchStudents(true);
 
   const filteredStudents = useMemo(() => {
-    return students.filter(s => {
-      if (!s) return false;
-      const name = s.name || '';
-      const sid = s.studentId || '';
-      const phone = s.phone || '';
-      const search = searchTerm || '';
-      return name.includes(search) || sid.includes(search) || phone.includes(search);
-    });
+    return students.filter(s => 
+      s.name.includes(searchTerm) || s.studentId.includes(searchTerm) || s.phone.includes(searchTerm)
+    );
   }, [students, searchTerm]);
 
   // --- Bulk Selection ---
@@ -193,7 +188,7 @@ const Students: React.FC = () => {
     setProcessingFile(true);
     try {
         // 1. Fetch current students from DB to compare for deletions
-        // Force true to get latest DB state to ensure accuracy
+        // Force true to get latest DB state
         const currentDbStudents = await getStudents(true); 
 
         const arrayBuffer = await file.arrayBuffer();
@@ -261,16 +256,12 @@ const Students: React.FC = () => {
             ? `\n⚠️ سيتم حذف ${toDeleteDbIds.length} طالب موجودين في النظام ولكن غير موجودين في الملف.` 
             : '';
 
-        if (window.confirm(`تم العثور على ${toUpsert.length} طالب في الملف.${deleteMsg}\n\nهل تريد المتابعة وتحديث قاعدة البيانات بالكامل؟\n(هذه العملية قد تستغرق بضع ثوانٍ)`)) {
-            // Use the updated function that returns counts
-            const result = await syncStudentsBatch(toUpsert, [], toDeleteDbIds); 
+        if (window.confirm(`تم العثور على ${toUpsert.length} طالب في الملف.${deleteMsg}\n\nهل تريد المتابعة وتحديث قاعدة البيانات بالكامل؟`)) {
+            // Pass toUpsert for update/insert
+            // Pass toDeleteDbIds for deletion
+            await syncStudentsBatch(toUpsert, [], toDeleteDbIds); 
             await fetchStudents(true); 
-            
-            // Detailed Feedback
-            alert(`✅ تمت العملية بنجاح!\n\n` +
-                  `➕ تمت إضافة: ${result.added} طالب\n` +
-                  `🔄 تم تحديث: ${result.updated} طالب\n` +
-                  `❌ تم حذف: ${result.deleted} طالب`);
+            alert("تم تحديث البيانات بنجاح!");
         }
     } catch (error: any) { 
         console.error(error);
@@ -382,8 +373,8 @@ const Students: React.FC = () => {
                             </button>
                         </div>
                         <div className="w-[30%] font-bold text-slate-800 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs border border-slate-200">{(s.name || '?').charAt(0)}</div>
-                            {s.name || 'اسم غير متوفر'}
+                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs border border-slate-200">{s.name.charAt(0)}</div>
+                            {s.name}
                         </div>
                         <div className="w-[20%] text-slate-600 flex items-center gap-2">
                             <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold">{s.grade}</span>

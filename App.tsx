@@ -20,8 +20,9 @@ import StaffRequests from './pages/staff/Requests';
 import StaffStudents from './pages/staff/Students';
 import StaffDeputy from './pages/staff/Deputy';
 import StaffObservations from './pages/staff/Observations';
-import GateScanner from './pages/staff/GateScanner'; 
+import GateScanner from './pages/staff/GateScanner';
 import ExitPermissions from './pages/staff/ExitPermissions'; // Import New Page
+import StaffStudentDirectory from './pages/staff/StudentDirectory';
 import { StaffUser } from './types';
 
 const { HashRouter, Routes, Route, Navigate, useLocation } = ReactRouterDOM as any;
@@ -36,15 +37,15 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
 };
 
 // Protected Route for Staff with Permission Check
-const ProtectedStaffRoute = ({ 
-    children, 
-    requiredPermission 
-}: { 
-    children?: React.ReactNode, 
-    requiredPermission?: string 
+const ProtectedStaffRoute = ({
+  children,
+  requiredPermission
+}: {
+  children?: React.ReactNode,
+  requiredPermission?: string
 }) => {
   const session = localStorage.getItem('ozr_staff_session');
-  
+
   if (!session) {
     return <Navigate to="/staff/login" replace />;
   }
@@ -52,9 +53,9 @@ const ProtectedStaffRoute = ({
   if (requiredPermission) {
     const user: StaffUser = JSON.parse(session);
     const perms = user.permissions || ['attendance', 'requests', 'reports'];
-    
+
     if (!perms.includes(requiredPermission)) {
-        return <Navigate to="/staff/home" replace />;
+      return <Navigate to="/staff/home" replace />;
     }
   }
 
@@ -63,14 +64,14 @@ const ProtectedStaffRoute = ({
 
 const AppContent = () => {
   const location = useLocation();
-  
+
   // Determine Role Logic
   // Admin Route: Starts with /admin AND isn't the login page
   const isAdminRoute = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login';
-  
+
   // Staff Route: Starts with /staff AND isn't the login page
   const isStaffRoute = location.pathname.startsWith('/staff') && location.pathname !== '/staff/login';
-  
+
   let role: 'admin' | 'staff' | 'public' = 'public';
   if (isAdminRoute) role = 'admin';
   if (isStaffRoute) role = 'staff';
@@ -82,7 +83,7 @@ const AppContent = () => {
       localStorage.removeItem('ozr_staff_session');
     }
     // Redirect to home page completely
-    window.location.href = '/'; 
+    window.location.href = '/';
   };
 
   return (
@@ -91,11 +92,11 @@ const AppContent = () => {
         <Route path="/" element={<Home />} />
         <Route path="/submit" element={<Submission />} />
         <Route path="/inquiry" element={<Inquiry />} />
-        
+
         {/* Login Pages - Now inside Layout to allow navigation back to Home */}
         <Route path="/admin/login" element={<Login />} />
         <Route path="/staff/login" element={<StaffLogin />} />
-        
+
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/admin/attendance-stats" element={<ProtectedRoute><AttendanceStats /></ProtectedRoute>} />
@@ -103,21 +104,21 @@ const AppContent = () => {
         <Route path="/admin/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
         <Route path="/admin/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
         <Route path="/admin/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-        
+
         {/* Staff Routes */}
         <Route path="/staff/home" element={<ProtectedStaffRoute><StaffHome /></ProtectedStaffRoute>} />
         <Route path="/staff/attendance" element={<ProtectedStaffRoute requiredPermission="attendance"><Attendance /></ProtectedStaffRoute>} />
         <Route path="/staff/reports" element={<ProtectedStaffRoute requiredPermission="reports"><StaffReports /></ProtectedStaffRoute>} />
         <Route path="/staff/requests" element={<ProtectedStaffRoute requiredPermission="requests"><StaffRequests /></ProtectedStaffRoute>} />
         <Route path="/staff/students" element={<ProtectedStaffRoute requiredPermission="students"><StaffStudents /></ProtectedStaffRoute>} />
-        <Route path="/staff/directory" element={<ProtectedStaffRoute requiredPermission="contact_directory"><StaffStudents /></ProtectedStaffRoute>} />
+        <Route path="/staff/directory" element={<ProtectedStaffRoute requiredPermission="contact_directory"><StaffStudentDirectory /></ProtectedStaffRoute>} />
         <Route path="/staff/deputy" element={<ProtectedStaffRoute requiredPermission="deputy"><StaffDeputy /></ProtectedStaffRoute>} />
         <Route path="/staff/observations" element={<ProtectedStaffRoute requiredPermission="observations"><StaffObservations /></ProtectedStaffRoute>} />
-        
+
         {/* NEW ROUTES */}
         <Route path="/staff/gate" element={<ProtectedStaffRoute requiredPermission="gate_security"><GateScanner /></ProtectedStaffRoute>} />
         <Route path="/staff/exit-permissions" element={<ProtectedStaffRoute requiredPermission="exit_perms"><ExitPermissions /></ProtectedStaffRoute>} />
-        
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

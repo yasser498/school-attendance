@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, MessageSquare, BookUser, LayoutGrid, Briefcase, ChevronLeft, ChevronRight, Settings, Sparkles, UserCircle, ScanLine, LogOut as ExitIcon, Download, Share, BellRing, Loader2, Code, Zap } from 'lucide-react';
+import { Home, FileText, Search, ShieldCheck, LogOut, Menu, X, Users, ClipboardCheck, BarChart2, MessageSquare, BookUser, LayoutGrid, Briefcase, ChevronLeft, ChevronRight, Settings, Sparkles, UserCircle, ScanLine, LogOut as ExitIcon, Download, Share, BellRing, Loader2, Code, Zap, Bell, CheckCheck, AlertCircle, Info, CheckCircle, ChevronDown, ChevronUp, Award, Stethoscope } from 'lucide-react';
 import { StaffUser, AppNotification } from '../types';
 import { getPendingRequestsCountForStaff, getNotifications, getParentChildren, createNotification } from '../services/storage';
 import ChatBot from './ChatBot';
@@ -22,6 +22,11 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
   const [pendingCount, setPendingCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
   const [staffPermissions, setStaffPermissions] = useState<string[]>([]);
+
+  // Notification panel state
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
 
   // Install Logic State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -180,6 +185,15 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
             const newNotif = payload.new as AppNotification;
             if (watchedIds.includes(newNotif.targetUserId)) {
               handleNotification(newNotif);
+              // Also refresh notifications list
+              if (role === 'staff') {
+                const userId2 = JSON.parse(localStorage.getItem('ozr_staff_session') || '{}').id;
+                if (userId2) {
+                  const freshNotifs = await getNotifications(userId2);
+                  setNotifications(freshNotifs.slice(0, 10));
+                  setNotificationCount(freshNotifs.filter((n: any) => !n.isRead).length);
+                }
+              }
             }
           }
         )
@@ -222,6 +236,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
           const notifs = await getNotifications(user.id);
           const unread = notifs.filter((n: any) => !n.isRead).length;
           setNotificationCount(unread);
+          setNotifications(notifs.slice(0, 10)); // keep latest 10
         }
       };
       fetchStaffData();
@@ -402,6 +417,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
               <SectionLabel label="العمليات والإجراءات" />
               <NavItem to="/admin/requests" icon={FileText} label="طلبات الأعذار" activeColor="amber" />
               <NavItem to="/admin/attendance-reports" icon={BarChart2} label="سجل الغياب اليومي" activeColor="emerald" />
+              <NavItem to="/admin/certificates" icon={Award} label="شهادات الانضباط" activeColor="teal" />
 
               <SectionLabel label="التحليل والبيانات" />
               <NavItem to="/admin/attendance-stats" icon={Sparkles} label="تحليل الذكاء" activeColor="purple" />
@@ -456,8 +472,97 @@ const Layout: React.FC<LayoutProps> = ({ children, role = 'public', onLogout }) 
               {hasPermission('deputy') && (
                 <NavItem to="/staff/deputy" icon={Briefcase} label="مكتب وكيل الشؤون" activeColor="rose" />
               )}
+              {/* Health Clinic */}
+              {hasPermission('health_clinic') && (
+                <NavItem to="/staff/health-clinic" icon={Stethoscope} label="العيادة المدرسية" activeColor="teal" />
+              )}
 
               <SectionLabel label="الخدمات المساندة" />
+
+              {/* Notifications Panel Toggle */}
+              <button
+                onClick={() => setShowNotifPanel(prev => !prev)}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 font-bold relative group mb-1.5 overflow-hidden
+                  ${showNotifPanel ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'}
+                  ${isSidebarCollapsed ? 'justify-center px-2' : ''}
+                `}
+              >
+                <Bell size={22} className={`shrink-0 transition-transform ${showNotifPanel ? 'text-blue-600 scale-110' : 'text-slate-400 group-hover:scale-110'}`} />
+                {!isSidebarCollapsed && <span className="truncate text-[15px]">الإشعارات</span>}
+                {notificationCount > 0 && (
+                  <span className={`absolute bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-md border-2 border-white z-20
+                    ${isSidebarCollapsed ? 'top-2 right-2 w-4 h-4 text-[8px]' : 'left-4 top-1/2 -translate-y-1/2 px-2 py-0.5 min-w-[20px]'}`}
+                  >
+                    {notificationCount}
+                  </span>
+                )}
+                {!isSidebarCollapsed && (
+                  <span className="mr-auto">{showNotifPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
+                )}
+              </button>
+
+              {/* Notification Panel (Expanded List) */}
+              {showNotifPanel && !isSidebarCollapsed && (
+                <div className="mx-2 mb-2 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg animate-fade-in">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                    <p className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">آخر الإشعارات</p>
+                    {notificationCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          setMarkingAllRead(true);
+                          try {
+                            const { markNotificationRead } = await import('../services/storage');
+                            for (const n of notifications.filter(x => !x.isRead)) {
+                              await markNotificationRead(n.id);
+                            }
+                            setNotificationCount(0);
+                            setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                          } catch (e) { console.error(e); }
+                          setMarkingAllRead(false);
+                        }}
+                        disabled={markingAllRead}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                      >
+                        {markingAllRead ? <Loader2 size={10} className="animate-spin" /> : <CheckCheck size={10} />}
+                        تعليم كمقروء
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[280px] overflow-y-auto custom-scrollbar divide-y divide-slate-50">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-slate-400">
+                        <Bell size={24} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-xs font-bold">لا توجد إشعارات</p>
+                      </div>
+                    ) : notifications.map(notif => {
+                      const typeConfig: Record<string, { icon: any, bg: string, text: string, dot: string }> = {
+                        alert: { icon: AlertCircle, bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+                        success: { icon: CheckCircle, bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+                        info: { icon: Info, bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
+                      };
+                      const cfg = typeConfig[notif.type || 'info'] || typeConfig.info;
+                      const Icon = cfg.icon;
+                      return (
+                        <div key={notif.id} className={`flex items-start gap-3 p-3 transition-colors hover:bg-slate-50/80 ${!notif.isRead ? 'bg-blue-50/30' : ''}`}>
+                          <div className={`w-8 h-8 rounded-xl ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                            <Icon size={14} className={cfg.text} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <p className={`text-xs font-extrabold truncate ${!notif.isRead ? 'text-slate-800' : 'text-slate-500'}`}>{notif.title}</p>
+                              {!notif.isRead && <span className={`w-2 h-2 rounded-full ${cfg.dot} shrink-0 mt-1`}></span>}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                            <p className="text-[9px] text-slate-400 mt-1 font-mono">
+                              {new Date(notif.createdAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {/* Contact Directory (Teachers) */}
               {hasPermission('contact_directory') && !hasPermission('students') && (
                 <NavItem to="/staff/directory" icon={BookUser} label="دليل التواصل" activeColor="indigo" />

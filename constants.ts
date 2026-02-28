@@ -23,6 +23,9 @@ export const PERMISSIONS = [
   { key: 'observations', label: 'ملاحظات الطلاب' },
   { key: 'gate_security', label: 'أمن البوابة (المسح الضوئي)' },
   { key: 'exit_perms', label: 'إدارة استئذان الطلاب' },
+  { key: 'health_clinic', label: 'العيادة المدرسية (الموجه الصحي)' },
+  { key: 'activities', label: 'رائد النشاط (الفعاليات الرحلات)' },
+  { key: 'canteen', label: 'إدارة المقصف المدرسي (المحفظة)' },
 ];
 
 // Data extracted from the Ministry of Education Behavior PDF

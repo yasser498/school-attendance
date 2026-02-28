@@ -4,7 +4,7 @@ import {
     Search, User, School, Copy, Check, CalendarDays, AlertCircle, Loader2,
     FileText, ShieldAlert, Star, MessageSquare, Send, CheckCircle, Clock, Plus, Users, Bell,
     LogOut, ChevronRight, ArrowLeft, Activity, ChevronLeft, Archive, AlertTriangle,
-    Newspaper, CreditCard, X, Sparkles, CalendarCheck, QrCode, Paperclip, Printer, LogOut as ExitIcon, Calendar, Medal, Trophy, Phone, ArrowRight, Info, BellRing, MapPin, ScanLine, FilePlus, Zap
+    Newspaper, CreditCard, X, Sparkles, CalendarCheck, QrCode, Paperclip, Printer, LogOut as ExitIcon, Calendar, Medal, Trophy, Phone, ArrowRight, Info, BellRing, MapPin, ScanLine, FilePlus, Zap, Award
 } from 'lucide-react';
 import {
     getStudentByCivilId, getRequestsByStudentId, getStudentAttendanceHistory,
@@ -12,12 +12,12 @@ import {
     acknowledgeObservation, getParentChildren, linkParentToStudent,
     getNotifications, markNotificationRead, getStudentPoints, getSchoolNews, generateSmartStudentReport,
     getAvailableSlots, bookAppointment, getMyAppointments, getMyExitPermissions, getStudentsByPhone,
-    checkParentRegistration, addExitPermission
+    checkParentRegistration, addExitPermission, getCertificates, getActivities, getActivityApprovals, updateActivityApproval, getStudentWallet
 } from '../services/storage';
 import { subscribeToPushNotifications, checkPushPermission } from '../services/pushService';
 import {
     Student, ExcuseRequest, RequestStatus, AttendanceStatus, BehaviorRecord,
-    StudentObservation, AppNotification, StudentPoint, SchoolNews, AppointmentSlot, Appointment, ExitPermission
+    StudentObservation, AppNotification, StudentPoint, SchoolNews, AppointmentSlot, Appointment, ExitPermission, Certificate, ActivityPermission, ActivityApproval
 } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -56,6 +56,10 @@ const Inquiry: React.FC = () => {
     const [observations, setObservations] = useState<StudentObservation[]>([]);
     const [points, setPoints] = useState<{ total: number, history: StudentPoint[] }>({ total: 0, history: [] });
     const [exitPermissions, setExitPermissions] = useState<ExitPermission[]>([]);
+    const [certificates, setCertificates] = useState<Certificate[]>([]);
+    const [activities, setActivities] = useState<ActivityPermission[]>([]);
+    const [approvals, setApprovals] = useState<ActivityApproval[]>([]);
+    const [walletBalance, setWalletBalance] = useState<number>(0);
     const [loading, setLoading] = useState(false);
     const [newChildInput, setNewChildInput] = useState('');
     const [isAddingChild, setIsAddingChild] = useState(false);
@@ -238,7 +242,7 @@ const Inquiry: React.FC = () => {
         setLoading(true);
         try {
             // Fetch ALL necessary data for tabs
-            const [reqs, att, beh, allObs, pts, slots, apps, exits] = await Promise.all([
+            const [reqs, att, beh, allObs, pts, slots, apps, exits, allCerts, allActs, allApprovals, walletAmount] = await Promise.all([
                 getRequestsByStudentId(student.studentId),
                 getStudentAttendanceHistory(student.studentId),
                 getBehaviorRecords(student.studentId),
@@ -246,7 +250,11 @@ const Inquiry: React.FC = () => {
                 getStudentPoints(student.studentId),
                 getAvailableSlots(),
                 getMyAppointments(parentCivilId),
-                getMyExitPermissions([student.studentId])
+                getMyExitPermissions([student.studentId]),
+                getCertificates(),
+                getActivities(),
+                getActivityApprovals(),
+                getStudentWallet(student.studentId)
             ]);
 
             setHistory(reqs);
@@ -258,6 +266,15 @@ const Inquiry: React.FC = () => {
             setAvailableSlots(slots);
             setMyAppointments(apps.filter(a => a.studentId === student.studentId));
             setExitPermissions(exits);
+            setCertificates(allCerts.filter(c => c.studentId === student.studentId));
+
+            const filteredActs = allActs.filter(a => a.status === 'active' &&
+                (a.targetGrades.includes(student.grade) || a.targetGrades.length === 0)
+            );
+            setActivities(filteredActs);
+            setApprovals(allApprovals.filter(a => a.studentId === student.studentId));
+            setWalletBalance(walletAmount);
+
             setActiveTab('overview');
             setSmartReport(null);
         } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -610,7 +627,10 @@ const Inquiry: React.FC = () => {
                                 { id: 'exits', label: 'الاستئذان', icon: ExitIcon },
                                 { id: 'visits', label: 'المواعيد', icon: CalendarCheck },
                                 { id: 'behavior', label: 'المخالفات', icon: ShieldAlert },
-                                { id: 'observations', label: 'الملاحظات', icon: MessageSquare }
+                                { id: 'observations', label: 'الملاحظات', icon: MessageSquare },
+                                { id: 'activities', label: 'الموافقات', icon: CalendarCheck },
+                                { id: 'certificates', label: 'الشهادات', icon: Award },
+                                { id: 'wallet', label: 'المقصف', icon: CreditCard }
                             ].map(tab => (
                                 <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all duration-300 min-w-max ${activeTab === tab.id ? 'bg-white text-blue-700 shadow-md border border-slate-100 scale-[1.02]' : 'bg-transparent text-slate-600 hover:bg-white/50 border border-transparent hover:text-slate-900'}`}>
                                     <tab.icon size={18} className={activeTab === tab.id ? "text-blue-600" : "opacity-70"} /> {tab.label}
@@ -854,6 +874,165 @@ const Inquiry: React.FC = () => {
                                                     ))}
                                                 </div>
                                             )}
+
+                                            {certificates.length > 0 && (
+                                                <div className="mt-8 mb-4">
+                                                    <h3 className="font-bold text-slate-800 text-sm px-2 mb-3">شهادات التميز والانضباط المعتمدة</h3>
+                                                    <div className="grid gap-3">
+                                                        {certificates.map(cert => (
+                                                            <div key={cert.id} className="bg-white p-4 rounded-2xl border border-slate-200 border-r-4 border-r-amber-400 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
+                                                                <div className="flex items-center gap-3 w-full sm:w-auto">
+                                                                    <div className={`p-3 rounded-xl ${cert.type === 'attendance' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'}`}><Medal size={24} /></div>
+                                                                    <div>
+                                                                        <p className="font-bold text-slate-800 text-sm">شهادة {cert.type === 'attendance' ? 'انتظام ومواظبة' : 'تفوق وتميز'} ( شهر {cert.month} )</p>
+                                                                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">تم استصدارها بتاريخ {new Date(cert.createdAt).toLocaleDateString('ar-SA')}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <button onClick={() => {
+                                                                    const reasonText = cert.type === 'attendance' ? 'انضباطه وعدم غيابه' : 'تفوقه العلمي والعملي';
+                                                                    setCertificateData({ studentName: selectedStudent!.name, reason: `${reasonText} طوال شهر ${cert.month}`, date: new Date(cert.createdAt).toLocaleDateString('ar-SA') });
+                                                                    setPrintMode('certificate');
+                                                                    setTimeout(() => { window.print(); setPrintMode('none'); }, 300);
+                                                                }} className="w-full sm:w-auto text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 py-2 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors border border-amber-200"><Printer size={14} /> عرض وطباعة</button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* --- Activities & Trips Approvals Tab --- */}
+                                    {activeTab === ('activities' as any) && (
+                                        <div className="space-y-6 animate-fade-in">
+                                            <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-sm border border-slate-200">
+                                                <h3 className="font-extrabold text-slate-800 text-lg mb-6 flex items-center gap-2">
+                                                    <CalendarCheck className="text-indigo-500" />
+                                                    التفويض الرقمي للأنشطة والرحلات (E-Slips)
+                                                </h3>
+
+                                                {activities.length === 0 ? (
+                                                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                                        <CalendarCheck size={48} className="mx-auto text-slate-300 mb-3" />
+                                                        <p className="text-slate-500 font-bold">لا يوجد أنشطة أو رحلات تتطلب تفويض حالياً.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-4">
+                                                        {activities.map(act => {
+                                                            const app = approvals.find(a => a.activityId === act.id);
+                                                            return (
+                                                                <div key={act.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                                                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4">
+                                                                        <div className="flex-1">
+                                                                            <h4 className="font-extrabold text-indigo-900 text-base mb-1">{act.title}</h4>
+                                                                            <p className="text-sm text-slate-600 leading-relaxed">{act.description}</p>
+                                                                            <div className="flex flex-wrap gap-4 mt-3 text-xs font-bold text-slate-500">
+                                                                                <span className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><Calendar size={14} className="text-indigo-500" /> {act.date}</span>
+                                                                                <span className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><CreditCard size={14} className="text-emerald-500" /> {act.cost ? `التكلفة: ${act.cost} ريال` : 'مجانية تماماً'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+                                                                        {app ? (
+                                                                            <div className={`w-full text-center py-3 rounded-xl text-sm font-bold border ${app.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                                                                {app.status === 'approved' ? '✅ تمت الموافقة من قبلك (تم التفويض)' : '❌ قمت بالاعتذار عن المشاركة'}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex gap-2 w-full">
+                                                                                <button onClick={async () => {
+                                                                                    await updateActivityApproval({ id: crypto.randomUUID(), activityId: act.id, studentId: selectedStudent.studentId, studentName: selectedStudent.name, grade: selectedStudent.grade, className: selectedStudent.className, parentCivilId: parentCivilId, status: 'approved', updatedAt: new Date().toISOString() });
+                                                                                    const updatedApps = await getActivityApprovals();
+                                                                                    setApprovals(updatedApps.filter(a => a.studentId === selectedStudent?.studentId));
+                                                                                    alert('تم الموافقة على الرحلة بنجاح.');
+                                                                                }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 px-4 rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2">أوافق على المشاركة <CheckCircle size={18} /></button>
+                                                                                <button onClick={async () => {
+                                                                                    await updateActivityApproval({ id: crypto.randomUUID(), activityId: act.id, studentId: selectedStudent.studentId, studentName: selectedStudent.name, grade: selectedStudent.grade, className: selectedStudent.className, parentCivilId: parentCivilId, status: 'rejected', updatedAt: new Date().toISOString() });
+                                                                                    const updatedApps = await getActivityApprovals();
+                                                                                    setApprovals(updatedApps.filter(a => a.studentId === selectedStudent?.studentId));
+                                                                                    alert('تم تسجيل الاعتذار.');
+                                                                                }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all border border-slate-200 flex items-center justify-center gap-2">أعتذر <X size={18} /></button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- Certificates Tab --- */}
+                                    {activeTab === ('certificates' as any) && (
+                                        <div className="space-y-6 animate-fade-in">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2"><Award size={24} className="text-purple-600" /> شهادات الشكر والتميز المعتمدة</h3>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {certificates.length === 0 ? (
+                                                    <div className="col-span-1 md:col-span-2 text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
+                                                        <Award size={48} className="mx-auto text-slate-300 mb-3" />
+                                                        <p className="text-slate-500 font-bold">لا توجد شهادات مصدرة حالياً.</p>
+                                                    </div>
+                                                ) : certificates.map(cert => (
+                                                    <div key={cert.id} className="relative p-6 rounded-3xl border border-slate-100 bg-white flex flex-col items-center group overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all text-center">
+                                                        <div className={`absolute top-0 right-0 w-full h-2 ${cert.type === 'attendance' ? 'bg-gradient-to-l from-emerald-400 to-teal-400' : 'bg-gradient-to-l from-purple-400 to-pink-400'}`}></div>
+                                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 mt-2 shadow-inner border-4 border-white ring-2 ${cert.type === 'attendance' ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' : 'bg-purple-50 text-purple-600 ring-purple-100'}`}>
+                                                            <Award size={40} className="group-hover:scale-110 transition-transform" />
+                                                        </div>
+                                                        <h4 className={`font-extrabold text-xl mb-1 ${cert.type === 'attendance' ? 'text-emerald-700' : 'text-purple-700'}`}>
+                                                            {cert.type === 'attendance' ? 'شهادة انتظام ومواظبة' : 'شهادة تفوق وتميز'}
+                                                        </h4>
+                                                        <p className="text-sm font-bold text-slate-500 mb-6 bg-slate-50 px-4 py-1.5 rounded-full inline-block">لشهر {cert.month}</p>
+
+                                                        <button
+                                                            onClick={() => {
+                                                                setCertificateData({
+                                                                    studentName: cert.studentName,
+                                                                    reason: cert.type === 'attendance' ? `انضباطه وعدم غيابه طوال شهر ${cert.month}` : `تفوقه العلمي والعملي طوال شهر ${cert.month}`,
+                                                                    date: new Date(cert.createdAt).toLocaleDateString('ar-SA')
+                                                                });
+                                                                setPrintMode('certificate');
+                                                                setTimeout(() => { window.print(); setPrintMode('none'); }, 300);
+                                                            }}
+                                                            className={`mt-auto w-full py-3 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md group-hover:shadow-lg ${cert.type === 'attendance' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/20'}`}
+                                                        >
+                                                            <Printer size={18} /> عرض وطباعة الشهادة
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- Wallet Tab --- */}
+                                    {activeTab === ('wallet' as any) && (
+                                        <div className="space-y-6 animate-fade-in">
+                                            {/* Digital Wallet Card */}
+                                            <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-[2rem] p-8 text-white shadow-lg relative overflow-hidden">
+                                                <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/20 rounded-full blur-3xl"></div>
+                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-6">
+                                                    <div>
+                                                        <p className="text-orange-100 text-sm font-bold mb-2 uppercase tracking-wider">الرصيد المتاح للمقصف المدرسي</p>
+                                                        <h3 className="text-5xl font-extrabold">{walletBalance} <span className="text-xl font-bold">ر.س</span></h3>
+                                                    </div>
+                                                    <div className="bg-white/20 p-5 rounded-3xl backdrop-blur-sm shadow-inner hidden md:block">
+                                                        <CreditCard size={48} className="text-white" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-8 pt-6 border-t border-white/20 flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm font-bold text-orange-50 gap-4">
+                                                    <p className="flex items-center gap-2"><Sparkles size={16} /> يستخدم الرصيد إلكترونياً عند الشراء عبر المقصف (بدون استخدام النقود)</p>
+                                                    <p className="bg-orange-600/50 px-4 py-2 rounded-xl backdrop-blur-sm border border-orange-400 font-mono">ID: {selectedStudent.studentId}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center shadow-sm">
+                                                <QrCode size={80} className="mx-auto text-slate-300 mb-4" />
+                                                <h3 className="font-extrabold text-slate-800 text-xl mb-2">إبراز الهوية للشراء</h3>
+                                                <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">دع الطالب يبرز "الهوية الرقمية" الخاصة به عند مقصف المدرسة ليتم مسح الباركود والخصم من المحفظة الرقمية بكل سهولة. يمكنك متابعة حركات الشراء لاحقاً.</p>
+                                            </div>
                                         </div>
                                     )}
 

@@ -129,7 +129,7 @@ export const clearStudents = async () => {
 // --- Requests (Excuses) ---
 
 export const getRequests = async (force = false): Promise<ExcuseRequest[]> => {
-    const { data, error } = await supabase.from('requests').select('*');
+    const { data, error } = await supabase.from('requests').select('*').order('created_at', { ascending: false });
     if (error) {
         console.error('getRequests error:', error);
         return [];
@@ -148,11 +148,12 @@ export const getRequests = async (force = false): Promise<ExcuseRequest[]> => {
         status: r.status as RequestStatus,
         adminReply: r.admin_reply,
         closedAt: r.closed_at,
+        createdAt: r.created_at,
     }));
 };
 
 export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseRequest[]> => {
-    const { data, error } = await supabase.from('requests').select('*').eq('student_id', studentId);
+    const { data, error } = await supabase.from('requests').select('*').eq('student_id', studentId).order('created_at', { ascending: false });
     if (error) return [];
     return data.map((r: any) => ({
         id: r.id,
@@ -168,6 +169,7 @@ export const getRequestsByStudentId = async (studentId: string): Promise<ExcuseR
         status: r.status as RequestStatus,
         adminReply: r.admin_reply,
         closedAt: r.closed_at,
+        createdAt: r.created_at,
     }));
 };
 
@@ -225,24 +227,33 @@ export const clearRequests = async () => {
 
 export const uploadFile = async (file: File): Promise<string> => {
     const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+
+    const fileToBase64 = (f: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(f);
+        });
+    };
+
     try {
         const { data, error } = await supabase.storage.from('excuses').upload(fileName, file);
         if (error) {
-            // Handle bucket not found error by returning a placeholder
-            // This ensures the app doesn't break if the backend isn't fully configured
-            if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
-                console.warn("Storage bucket 'excuses' not found. Returning mock URL.");
-                return "https://placehold.co/600x800?text=Storage+Not+Configured";
-            }
-            throw new Error(error.message);
+            // Fallback: If bucket is missing or storage not configured, use Base64
+            console.warn(`Storage upload failed: ${error.message}. Falling back to Base64 encoding.`);
+            return await fileToBase64(file);
         }
         const { data: publicData } = supabase.storage.from('excuses').getPublicUrl(fileName);
         return publicData.publicUrl;
     } catch (e: any) {
-        if (e.message?.includes('Bucket not found')) {
-            return "https://placehold.co/600x800?text=Bucket+Not+Found";
+        // Fallback for unexpected exceptions during upload
+        console.warn(`Storage exception: ${e.message}. Falling back to Base64 encoding.`);
+        try {
+            return await fileToBase64(file);
+        } catch {
+            throw new Error('فشل رفع الملف وتفشل عملية التحويل الاحتياطية.');
         }
-        throw e;
     }
 };
 
@@ -1132,9 +1143,22 @@ export const getAdminInsights = async (role?: string): Promise<AdminInsight[]> =
         isRead: d.is_read
     }));
 };
-
 export const clearAdminInsights = async () => {
     await supabase.from('admin_insights').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+};
+
+// --- WhatsApp Integration (Mock) ---
+export const sendWhatsAppMessage = async (phone: string, message: string): Promise<boolean> => {
+    const isEnabled = localStorage.getItem('whatsapp_integration') === 'true';
+    if (!isEnabled) return false;
+
+    // In a real production app, this would call your backend endpoint
+    // which then integrates with Twilio, Meta WhatsApp Cloud API, or a gateway like Wati/Ultramsg
+    console.log(`[WHATSAPP MOCK] Sending to ${phone}:\n${message}`);
+
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return true;
 };
 
 export const generateTeacherAbsenceSummary = async () => {
@@ -1143,4 +1167,198 @@ export const generateTeacherAbsenceSummary = async () => {
 
 export const sendPendingReferralReminders = async () => {
     return { message: "تم إرسال تذكيرات للموجه والوكيل." };
+};
+
+// --- Clinic Visits ---
+export const getClinicVisits = async (): Promise<any[]> => {
+    const { data, error } = await supabase.from('clinic_visits').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((v: any) => ({
+        id: v.id,
+        studentId: v.student_id,
+        studentName: v.student_name,
+        grade: v.grade,
+        className: v.class_name,
+        date: v.date,
+        symptoms: v.symptoms,
+        actionTaken: v.action_taken,
+        sentHome: v.sent_home,
+        notes: v.notes,
+        createdAt: v.created_at
+    }));
+};
+
+export const addClinicVisit = async (visit: any): Promise<void> => {
+    await supabase.from('clinic_visits').insert({
+        student_id: visit.studentId,
+        student_name: visit.studentName,
+        grade: visit.grade,
+        class_name: visit.className,
+        date: visit.date,
+        symptoms: visit.symptoms,
+        action_taken: visit.actionTaken,
+        sent_home: visit.sentHome,
+        notes: visit.notes
+    });
+
+    // Automation: If sentHome is true, create an emergency excuse and exit permission
+    if (visit.sentHome) {
+        // Create emergency excuse
+        await addRequest({
+            id: crypto.randomUUID(),
+            studentId: visit.studentId,
+            studentName: visit.studentName,
+            grade: visit.grade,
+            className: visit.className,
+            date: visit.date,
+            reason: 'حالة مرضية طارئة (العيادة المدرسية)',
+            details: `القرار: إرسال للمنزل. الأعراض: ${visit.symptoms}`,
+            status: 'APPROVED' as any,
+            createdAt: new Date().toISOString()
+        });
+
+        // Add Exit Permission
+        await addExitPermission({
+            id: crypto.randomUUID(),
+            studentId: visit.studentId,
+            studentName: visit.studentName,
+            grade: visit.grade,
+            className: visit.className,
+            parentName: 'ولي الأمر',
+            parentPhone: '0000',
+            reason: 'حالة صحية طارئة - العيادة',
+            createdBy: 'العيادة المدرسية',
+            status: 'pending_pickup',
+            createdAt: new Date().toISOString()
+        });
+    }
+};
+
+// --- Certificates ---
+export const getCertificates = async (): Promise<any[]> => {
+    const { data, error } = await supabase.from('certificates').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((c: any) => ({
+        id: c.id,
+        studentId: c.student_id,
+        studentName: c.student_name,
+        grade: c.grade,
+        className: c.class_name,
+        month: c.month,
+        type: c.type,
+        createdAt: c.created_at
+    }));
+};
+
+export const addCertificate = async (cert: any): Promise<void> => {
+    await supabase.from('certificates').insert({
+        student_id: cert.studentId,
+        student_name: cert.studentName,
+        grade: cert.grade,
+        class_name: cert.className,
+        month: cert.month,
+        type: cert.type
+    });
+};
+
+// --- E-Slips (Activities) ---
+export const getActivities = async (): Promise<any[]> => {
+    const { data, error } = await supabase.from('activities').select('*');
+    if (error) return [];
+    return data.map(a => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        date: a.date,
+        targetGrades: a.target_grades || [],
+        cost: a.cost,
+        status: a.status
+    }));
+};
+
+export const addActivity = async (activity: any): Promise<void> => {
+    await supabase.from('activities').insert({
+        title: activity.title,
+        description: activity.description,
+        date: activity.date,
+        target_grades: activity.targetGrades,
+        cost: activity.cost,
+        status: activity.status || 'active'
+    });
+};
+
+export const getActivityApprovals = async (activityId?: string): Promise<any[]> => {
+    let query = supabase.from('activity_approvals').select('*');
+    if (activityId) {
+        query = query.eq('activity_id', activityId);
+    }
+    const { data, error } = await query;
+    if (error) return [];
+    return data.map(a => ({
+        id: a.id,
+        activityId: a.activity_id,
+        studentId: a.student_id,
+        studentName: a.student_name,
+        grade: a.grade,
+        className: a.class_name,
+        parentCivilId: a.parent_civil_id,
+        status: a.status,
+        updatedAt: a.updated_at
+    }));
+};
+
+export const updateActivityApproval = async (approval: any): Promise<void> => {
+    const { data, error } = await supabase.from('activity_approvals').select('id').eq('activity_id', approval.activityId).eq('student_id', approval.studentId).single();
+    if (data) {
+        await supabase.from('activity_approvals').update({ status: approval.status, updated_at: new Date().toISOString() }).eq('id', data.id);
+    } else {
+        await supabase.from('activity_approvals').insert({
+            activity_id: approval.activityId,
+            student_id: approval.studentId,
+            student_name: approval.studentName,
+            grade: approval.grade,
+            class_name: approval.className,
+            parent_civil_id: approval.parentCivilId,
+            status: approval.status
+        });
+    }
+};
+
+// --- Canteen Wallet ---
+export const getWalletTransactions = async (studentId?: string): Promise<any[]> => {
+    let query = supabase.from('wallet_transactions').select('*').order('timestamp', { ascending: false });
+    if (studentId) {
+        query = query.eq('student_id', studentId);
+    }
+    const { data, error } = await query;
+    if (error) return [];
+    return data.map(tx => ({
+        id: tx.id,
+        studentId: tx.student_id,
+        type: tx.type,
+        amount: tx.amount,
+        description: tx.description,
+        createdBy: tx.created_by,
+        timestamp: tx.timestamp
+    }));
+};
+
+export const getStudentWallet = async (studentId: string): Promise<number> => {
+    const txs = await getWalletTransactions(studentId);
+    let balance = 0;
+    for (const tx of txs) {
+        if (tx.type === 'recharge') balance += tx.amount;
+        else balance -= tx.amount;
+    }
+    return balance;
+};
+
+export const addWalletTransaction = async (tx: any): Promise<void> => {
+    await supabase.from('wallet_transactions').insert({
+        student_id: tx.studentId,
+        type: tx.type,
+        amount: tx.amount,
+        description: tx.description,
+        created_by: tx.createdBy
+    });
 };

@@ -12,6 +12,7 @@ import Students from './pages/admin/Students';
 import Users from './pages/admin/Users';
 import AttendanceReports from './pages/admin/AttendanceReports';
 import AttendanceStats from './pages/admin/AttendanceStats';
+import Certificates from './pages/admin/Certificates';
 import StaffLogin from './pages/staff/Login';
 import StaffHome from './pages/staff/Home';
 import Attendance from './pages/staff/Attendance';
@@ -21,8 +22,11 @@ import StaffStudents from './pages/staff/Students';
 import StaffDeputy from './pages/staff/Deputy';
 import StaffObservations from './pages/staff/Observations';
 import GateScanner from './pages/staff/GateScanner';
-import ExitPermissions from './pages/staff/ExitPermissions'; // Import New Page
+import ExitPermissions from './pages/staff/ExitPermissions';
 import StaffStudentDirectory from './pages/staff/StudentDirectory';
+import HealthAdvisor from './pages/staff/HealthAdvisor'; // Import New Page
+import ActivityCoordinator from './pages/staff/ActivityCoordinator';
+import CanteenManager from './pages/staff/CanteenManager';
 import { StaffUser } from './types';
 
 const { HashRouter, Routes, Route, Navigate, useLocation } = ReactRouterDOM as any;
@@ -104,6 +108,7 @@ const AppContent = () => {
         <Route path="/admin/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
         <Route path="/admin/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
         <Route path="/admin/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+        <Route path="/admin/certificates" element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
 
         {/* Staff Routes */}
         <Route path="/staff/home" element={<ProtectedStaffRoute><StaffHome /></ProtectedStaffRoute>} />
@@ -118,6 +123,9 @@ const AppContent = () => {
         {/* NEW ROUTES */}
         <Route path="/staff/gate" element={<ProtectedStaffRoute requiredPermission="gate_security"><GateScanner /></ProtectedStaffRoute>} />
         <Route path="/staff/exit-permissions" element={<ProtectedStaffRoute requiredPermission="exit_perms"><ExitPermissions /></ProtectedStaffRoute>} />
+        <Route path="/staff/health-clinic" element={<ProtectedStaffRoute requiredPermission="health_clinic"><HealthAdvisor /></ProtectedStaffRoute>} />
+        <Route path="/staff/activities" element={<ProtectedStaffRoute requiredPermission="activities"><ActivityCoordinator /></ProtectedStaffRoute>} />
+        <Route path="/staff/canteen" element={<ProtectedStaffRoute requiredPermission="canteen"><CanteenManager /></ProtectedStaffRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

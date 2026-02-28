@@ -82,6 +82,9 @@ const StaffStudents: React.FC = () => {
     // Referral Action State
     const [processingReferralId, setProcessingReferralId] = useState<string | null>(null);
     const [referralOutcome, setReferralOutcome] = useState('');
+    const [referralFilter, setReferralFilter] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'returned_to_deputy'>('all');
+    const [returningReferralId, setReturningReferralId] = useState<string | null>(null);
+    const [returnNote, setReturnNote] = useState('');
 
     // AI Analysis State
     const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
@@ -127,7 +130,8 @@ const StaffStudents: React.FC = () => {
     const stats = useMemo(() => {
         const totalSessions = sessions.length;
         const totalReferrals = referrals.length;
-        const pendingRef = referrals.filter(r => r.status === 'pending').length;
+        const pendingRef = referrals.filter(r => r.status === 'pending' || r.status === 'in_progress').length;
+        const returnedRef = referrals.filter(r => r.status === 'returned_to_deputy').length;
         const resolvedRef = referrals.filter(r => r.status === 'resolved').length;
 
         const sessionTypes = {
@@ -150,7 +154,7 @@ const StaffStudents: React.FC = () => {
 
         const barData = Object.entries(referralSources).map(([name, value]) => ({ name, value }));
 
-        return { totalSessions, totalReferrals, pendingRef, resolvedRef, pieData, barData };
+        return { totalSessions, totalReferrals, pendingRef, resolvedRef, returnedRef, pieData, barData };
     }, [sessions, referrals]);
 
     const handleOpenStudent = async (student: Student) => {
@@ -231,13 +235,27 @@ const StaffStudents: React.FC = () => {
         } catch (e) { alert("حدث خطأ."); }
     };
 
+    const handleAcceptReferral = async (id: string) => {
+        await updateReferralStatus(id, 'in_progress', undefined);
+        fetchData();
+    };
+
     const handleReturnReferral = async (id: string) => {
-        if (!referralOutcome.trim()) return alert("اكتب الإجراء المتخذ.");
-        await updateReferralStatus(id, 'resolved', referralOutcome); // Changed to resolved for counselor
+        if (!referralOutcome.trim()) return alert("اكتب الإجراء المتخذ أولاً.");
+        await updateReferralStatus(id, 'resolved', referralOutcome);
         setProcessingReferralId(null);
         setReferralOutcome('');
         fetchData();
-        alert("تمت الإفادة وإغلاق الإحالة.");
+        alert("تمت الإفادة وإغلاق الإحالة. سيظهر ردك للوكيل مباشرة.");
+    };
+
+    const handleReturnToDeputy = async (id: string) => {
+        if (!returnNote.trim()) return alert("اكتب سبب الإرجاع.");
+        await updateReferralStatus(id, 'returned_to_deputy', returnNote);
+        setReturningReferralId(null);
+        setReturnNote('');
+        fetchData();
+        alert("تم إرجاع الإحالة للوكيل مع الملاحظة.");
     };
 
     const handlePrintCaseStudy = () => {
@@ -246,7 +264,11 @@ const StaffStudents: React.FC = () => {
     };
 
     // Derived Data Lists
-    const pendingReferrals = useMemo(() => referrals.filter(r => r.status === 'pending'), [referrals]);
+    const pendingReferrals = useMemo(() => referrals.filter(r => r.status === 'pending' || r.status === 'in_progress'), [referrals]);
+    const filteredReferrals = useMemo(() => {
+        if (referralFilter === 'all') return referrals;
+        return referrals.filter(r => r.status === referralFilter);
+    }, [referrals, referralFilter]);
     const myCases = useMemo(() => {
         // Students who have open referrals OR active sessions this month
         const activeIds = new Set<string>();
@@ -344,12 +366,13 @@ const StaffStudents: React.FC = () => {
                         {[
                             { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutGrid },
                             { id: 'cases', label: 'ملفاتي', icon: FileText },
-                            { id: 'inbox', label: 'الإحالات', icon: Inbox, badge: stats.pendingRef },
+                            { id: 'inbox', label: 'الإحالات', icon: Inbox, badge: stats.pendingRef, badgeOrange: stats.returnedRef },
                             { id: 'sessions', label: 'الجلسات', icon: MessageSquare }
                         ].map(tab => (
                             <button key={tab.id} onClick={() => setActiveView(tab.id as any)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeView === tab.id ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                                 <tab.icon size={16} /> <span className="hidden md:inline">{tab.label}</span>
-                                {tab.badge ? <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full min-w-[18px] text-center">{tab.badge}</span> : null}
+                                {(tab as any).badge ? <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full min-w-[18px] text-center">{(tab as any).badge}</span> : null}
+                                {(tab as any).badgeOrange ? <span className="bg-orange-400 text-white text-[10px] px-1.5 rounded-full min-w-[18px] text-center">{(tab as any).badgeOrange}</span> : null}
                             </button>
                         ))}
                     </div>
@@ -359,7 +382,7 @@ const StaffStudents: React.FC = () => {
                 {activeView === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in">
                         {/* Stats Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white p-5 rounded-3xl border border-purple-100 shadow-sm text-center relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-purple-50 rounded-bl-full -mr-8 -mt-8 group-hover:bg-purple-100 transition-colors"></div>
                                 <p className="text-xs font-bold text-slate-400 uppercase relative z-10">إجمالي الجلسات</p>
@@ -368,7 +391,7 @@ const StaffStudents: React.FC = () => {
                             </div>
                             <div className="bg-white p-5 rounded-3xl border border-blue-100 shadow-sm text-center relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 rounded-bl-full -mr-8 -mt-8"></div>
-                                <p className="text-xs font-bold text-slate-400 uppercase">إحالات جديدة</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase">إحالات نشطة</p>
                                 <h3 className="text-3xl font-extrabold text-blue-700 mt-1">{stats.pendingRef}</h3>
                                 <div className="mt-2 text-[10px] text-blue-400 bg-blue-50 inline-block px-2 py-0.5 rounded-lg font-bold">تتطلب إجراء</div>
                             </div>
@@ -378,11 +401,12 @@ const StaffStudents: React.FC = () => {
                                 <h3 className="text-3xl font-extrabold text-emerald-600 mt-1">{stats.resolvedRef}</h3>
                                 <div className="mt-2 text-[10px] text-emerald-500 bg-emerald-50 inline-block px-2 py-0.5 rounded-lg font-bold">إنجاز</div>
                             </div>
-                            <div className="bg-white p-5 rounded-3xl border border-red-100 shadow-sm text-center relative overflow-hidden">
+                            <div className={`p-5 rounded-3xl border shadow-sm text-center relative overflow-hidden ${stats.returnedRef > 0 ? 'bg-orange-50 border-orange-200 animate-pulse-slow' : 'bg-white border-red-100'}`}>
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-red-50 rounded-bl-full -mr-8 -mt-8"></div>
                                 <p className="text-xs font-bold text-slate-400 uppercase">مؤشر الخطر</p>
-                                <h3 className="text-3xl font-extrabold text-red-600 mt-1">{activeRiskList.length}</h3>
+                                <h3 className={`text-3xl font-extrabold mt-1 ${stats.returnedRef > 0 ? 'text-orange-600' : 'text-red-600'}`}>{activeRiskList.length}</h3>
                                 <div className="mt-2 text-[10px] text-red-400 bg-red-50 inline-block px-2 py-0.5 rounded-lg font-bold">غياب متصل</div>
+                                {stats.returnedRef > 0 && <div className="mt-1 text-[10px] text-orange-600 bg-orange-100 inline-block px-2 py-0.5 rounded-lg font-bold">{stats.returnedRef} مُرجعة من الموجه</div>}
                             </div>
                         </div>
 
@@ -479,60 +503,196 @@ const StaffStudents: React.FC = () => {
 
                 {/* --- INBOX VIEW --- */}
                 {activeView === 'inbox' && (
-                    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
-                        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-3">
-                            <Inbox className="text-blue-600" size={24} />
-                            <div>
-                                <h3 className="font-bold text-blue-900">صندوق الإحالات</h3>
-                                <p className="text-sm text-blue-700">الطلبات الواردة من المعلمين والوكيل للمعالجة.</p>
+                    <div className="space-y-5 animate-fade-in">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 rounded-2xl text-white flex items-center justify-between shadow-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white/10 p-2 rounded-xl"><Inbox size={22} /></div>
+                                <div>
+                                    <h3 className="font-bold text-lg">صندوق الإحالات الوارد</h3>
+                                    <p className="text-blue-100 text-xs">الطلبات الواردة من الوكيل والمعلمين</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 text-xs font-bold">
+                                <span className="bg-amber-400 text-slate-900 px-3 py-1.5 rounded-full">{referrals.filter(r => r.status === 'pending').length} جديد</span>
+                                <span className="bg-blue-400/40 text-white px-3 py-1.5 rounded-full">{referrals.filter(r => r.status === 'in_progress').length} جارٍ</span>
                             </div>
                         </div>
 
-                        {pendingReferrals.length === 0 ? <p className="text-slate-400 text-center py-10 bg-white rounded-3xl border border-slate-200 border-dashed">صندوق الوارد فارغ. ممتاز!</p> :
-                            pendingReferrals.map(ref => (
-                                <div key={ref.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-blue-100 text-blue-700 w-10 h-10 rounded-full flex items-center justify-center font-bold">{ref.studentName.charAt(0)}</div>
-                                            <div>
-                                                <h3 className="font-bold text-lg text-slate-900">{ref.studentName}</h3>
-                                                <p className="text-sm text-slate-500">{ref.grade} - {ref.className}</p>
+                        {/* Filter Chips */}
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                            {[
+                                { k: 'all', l: 'الكل', count: referrals.length },
+                                { k: 'pending', l: 'جديدة', count: referrals.filter(r => r.status === 'pending').length },
+                                { k: 'in_progress', l: 'جارٍ معالجتها', count: referrals.filter(r => r.status === 'in_progress').length },
+                                { k: 'resolved', l: 'مغلقة', count: referrals.filter(r => r.status === 'resolved').length },
+                            ].map(f => (
+                                <button key={f.k} onClick={() => setReferralFilter(f.k as any)} className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all border ${referralFilter === f.k ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                                    {f.l} {f.count > 0 && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${referralFilter === f.k ? 'bg-white/20' : 'bg-slate-100'}`}>{f.count}</span>}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Referral Cards */}
+                        {filteredReferrals.length === 0
+                            ? <p className="text-slate-400 text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200 font-bold">لا توجد إحالات في هذه الفئة</p>
+                            : <div className="space-y-4">
+                                {[...filteredReferrals].sort((a, b) => b.referralDate.localeCompare(a.referralDate)).map(ref => {
+                                    const isProc = processingReferralId === ref.id;
+                                    const isRet = returningReferralId === ref.id;
+                                    return (
+                                        <div key={ref.id} className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all overflow-hidden ${ref.status === 'pending' ? 'border-r-4 border-r-amber-400' : ''}${ref.status === 'in_progress' ? 'border-r-4 border-r-blue-500' : ''}${ref.status === 'resolved' ? 'border-r-4 border-r-emerald-400' : ''}${ref.status === 'returned_to_deputy' ? 'border-r-4 border-r-orange-400' : ''}`}>
+                                            <div className="p-5">
+                                                {/* Student Row */}
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-lg text-white ${ref.status === 'pending' ? 'bg-amber-500' : ref.status === 'in_progress' ? 'bg-blue-500' : ref.status === 'resolved' ? 'bg-emerald-500' : 'bg-orange-500'}`}>{ref.studentName.charAt(0)}</div>
+                                                        <div>
+                                                            <h3 className="font-bold text-slate-900">{ref.studentName}</h3>
+                                                            <p className="text-xs text-slate-500">{ref.grade} - {ref.className}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <span className={`text-[10px] font-extrabold px-2 py-1 rounded-full inline-block mb-1 ${ref.status === 'pending' ? 'bg-amber-100 text-amber-700' : ref.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : ref.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                            {ref.status === 'pending' ? 'جديدة' : ref.status === 'in_progress' ? 'جارٍ المعالجة' : ref.status === 'resolved' ? 'مغلقة ✓' : 'مُرجعة للوكيل'}
+                                                        </span>
+                                                        <p className="text-[10px] text-slate-400 font-mono block">{ref.referralDate} &bull; {ref.referredBy === 'deputy' ? '🔴 الوكيل' : '📝 معلم'}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Reason */}
+                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3 relative">
+                                                    <span className="text-[9px] font-extrabold text-slate-400 uppercase absolute -top-2 right-3 bg-white px-2 border rounded-full">سبب الإحالة</span>
+                                                    <p className="text-sm text-slate-700 leading-relaxed">{ref.reason}</p>
+                                                </div>
+
+                                                {/* Outcome / Return Note */}
+                                                {ref.outcome && (
+                                                    <div className={`rounded-xl p-3 mb-3 border ${ref.status === 'resolved' ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
+                                                        <p className={`text-[10px] font-extrabold uppercase mb-1 ${ref.status === 'resolved' ? 'text-emerald-700' : 'text-orange-700'}`}>{ref.status === 'resolved' ? '✅ الإجراء المتخذ (رد الموجه)' : '↩ ملاحظة الموجه (سبب الإرجاع)'}</p>
+                                                        <p className="text-sm text-slate-700">{ref.outcome}</p>
+                                                    </div>
+                                                )}
+
+                                                {/* === ACTIONS by status === */}
+                                                {ref.status === 'pending' && (
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => { const s = students.find(x => x.studentId === ref.studentId); if (s) handleOpenStudent(s); }} className="flex-1 bg-white border border-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50">🗂 فتح ملف الطالب</button>
+                                                        <button onClick={() => handleAcceptReferral(ref.id)} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">✓ قبول ومتابعة</button>
+                                                    </div>
+                                                )}
+
+                                                {ref.status === 'in_progress' && !isProc && !isRet && (
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => { const s = students.find(x => x.studentId === ref.studentId); if (s) handleOpenStudent(s); }} className="flex-1 bg-white border border-slate-200 text-slate-600 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50">🗂 ملف الطالب</button>
+                                                        <button onClick={() => setReturningReferralId(ref.id)} className="flex-1 bg-orange-50 text-orange-700 border border-orange-200 py-2.5 rounded-xl text-xs font-bold hover:bg-orange-100">↩ إرجاع للوكيل</button>
+                                                        <button onClick={() => setProcessingReferralId(ref.id)} className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-200">✅ إغلاق</button>
+                                                    </div>
+                                                )}
+
+                                                {ref.status === 'in_progress' && isProc && (
+                                                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 animate-fade-in">
+                                                        <h4 className="font-bold text-purple-800 text-sm mb-2 flex items-center gap-2"><Send size={14} /> الإجراء المتخذ (يُرسل للوكيل)</h4>
+                                                        <textarea className="w-full p-3 border border-purple-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 min-h-[90px] bg-white mb-3" placeholder="صف الإجراءات: جلسة فردية، خطة علاجية، استدعاء ولي أمر..." value={referralOutcome} onChange={e => setReferralOutcome(e.target.value)} />
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => setProcessingReferralId(null)} className="flex-1 py-2 bg-white text-slate-600 rounded-xl text-xs font-bold border">إلغاء</button>
+                                                            <button onClick={() => handleReturnReferral(ref.id)} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-lg">✅ إغلاق وإرسال للوكيل</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {ref.status === 'in_progress' && isRet && (
+                                                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 animate-fade-in">
+                                                        <h4 className="font-bold text-orange-800 text-sm mb-2">↩ سبب الإرجاع للوكيل</h4>
+                                                        <textarea className="w-full p-3 border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px] bg-white mb-3" placeholder="مثال: يحتاج الطالب متابعة سلوكية من قبلك أولاً..." value={returnNote} onChange={e => setReturnNote(e.target.value)} />
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => setReturningReferralId(null)} className="flex-1 py-2 bg-white text-slate-600 rounded-xl text-xs font-bold border">إلغاء</button>
+                                                            <button onClick={() => handleReturnToDeputy(ref.id)} className="flex-1 py-2 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700">↩ إرسال للوكيل</button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold">جديدة</span>
-                                            <p className="text-[10px] text-slate-400 mt-1">من: {ref.referredBy === 'deputy' ? 'الوكيل' : 'معلم'}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-slate-50 p-4 rounded-xl mb-4 text-sm text-slate-700 border border-slate-100 relative">
-                                        <span className="absolute -top-2.5 right-3 bg-white px-2 text-[10px] font-bold text-slate-400 uppercase border rounded-full">سبب الإحالة</span>
-                                        {ref.reason}
-                                    </div>
-
-                                    {processingReferralId === ref.id ? (
-                                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 animate-fade-in">
-                                            <h4 className="font-bold text-purple-900 mb-2 flex items-center gap-2 text-sm"><Send size={14} /> الإجراء المتخذ والرد</h4>
-                                            <textarea className="w-full p-3 border border-purple-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] bg-white mb-3" placeholder="ما هي الإجراءات التي قمت بها؟ (جلسة فردية، استدعاء ولي أمر، خطة علاجية...)" value={referralOutcome} onChange={e => setReferralOutcome(e.target.value)}></textarea>
-                                            <div className="flex gap-2 justify-end">
-                                                <button onClick={() => setProcessingReferralId(null)} className="px-4 py-2 bg-white text-slate-600 rounded-lg text-xs font-bold border hover:bg-slate-50">إلغاء</button>
-                                                <button onClick={() => handleReturnReferral(ref.id)} className="px-6 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-200">إرسال وإنهاء</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex gap-2">
-                                            <button onClick={() => { const s = students.find(x => x.studentId === ref.studentId); if (s) handleOpenStudent(s); }} className="flex-1 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">فتح ملف الطالب</button>
-                                            <button onClick={() => setProcessingReferralId(ref.id)} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">معالجة الإحالة</button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))
+                                    );
+                                })}
+                            </div>
                         }
                     </div>
                 )}
 
 
+                {/* --- SESSIONS VIEW (FULL LIST) --- */}
+                {activeView === 'sessions' && (
+                    <div className="space-y-5 animate-fade-in">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-5 rounded-2xl text-white flex items-center justify-between shadow-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white/10 p-2 rounded-xl"><MessageSquare size={22} /></div>
+                                <div>
+                                    <h3 className="font-bold text-lg">سجل الجلسات الإرشادية</h3>
+                                    <p className="text-purple-100 text-xs">جميع الجلسات المسجلة — {sessions.length} جلسة</p>
+                                </div>
+                            </div>
+                        </div>
 
+                        {/* Session Type Stats */}
+                        <div className="grid grid-cols-3 gap-3">
+                            {[
+                                { type: 'individual', label: 'فردية', icon: '🧑', color: 'bg-purple-50 border-purple-200 text-purple-700' },
+                                { type: 'group', label: 'جماعية', icon: '👥', color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                                { type: 'parent_meeting', label: 'ولي أمر', icon: '👨‍👧', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                            ].map(s => (
+                                <div key={s.type} className={`${s.color} border rounded-2xl p-4 text-center`}>
+                                    <p className="text-2xl mb-1">{s.icon}</p>
+                                    <p className="text-2xl font-black">{sessions.filter(x => x.sessionType === s.type).length}</p>
+                                    <p className="text-xs font-bold">{s.label}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Sessions List */}
+                        {sessions.length === 0
+                            ? <p className="text-center py-16 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200 font-bold">لا توجد جلسات مسجلة بعد</p>
+                            : <div className="space-y-3">
+                                {[...sessions].sort((a, b) => b.date.localeCompare(a.date)).map(s => {
+                                    const typeMap: Record<string, { label: string, cls: string }> = {
+                                        individual: { label: 'فردية', cls: 'bg-purple-100 text-purple-700' },
+                                        group: { label: 'جماعية', cls: 'bg-blue-100 text-blue-700' },
+                                        parent_meeting: { label: 'ولي أمر', cls: 'bg-emerald-100 text-emerald-700' },
+                                    };
+                                    const tm = typeMap[s.sessionType] || typeMap.individual;
+                                    return (
+                                        <div key={s.id} className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md transition-all border-r-4 border-r-purple-400">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">{s.studentName.charAt(0)}</div>
+                                                    <div>
+                                                        <h3 className="font-bold text-slate-900 text-sm">{s.studentName}</h3>
+                                                        <p className="text-xs font-bold text-purple-700">{s.topic}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`text-[10px] font-extrabold px-2 py-1 rounded-full ${tm.cls}`}>{tm.label}</span>
+                                                    <p className="text-[10px] text-slate-400 mt-1 font-mono">{s.date}</p>
+                                                </div>
+                                            </div>
+                                            {s.recommendations && (
+                                                <div className="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-600 border border-slate-100 mt-2">
+                                                    <span className="font-bold text-slate-400 text-[10px] block mb-1">التوصيات:</span>
+                                                    {s.recommendations}
+                                                </div>
+                                            )}
+                                            <div className="flex gap-2 mt-3 justify-end">
+                                                <button onClick={() => { const st = students.find(x => x.studentId === s.studentId); if (st) handleOpenStudent(st); }} className="text-xs bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-100">🗂 ملف الطالب</button>
+                                                <button onClick={async () => { if (window.confirm('حذف هذه الجلسة؟')) { await deleteGuidanceSession(s.id); fetchData(); } }} className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100">حذف</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        }
+                    </div>
+                )}
 
                 {/* --- STUDENT MODAL (THE CORE) --- */}
                 {selectedStudent && (
@@ -815,7 +975,7 @@ const StaffStudents: React.FC = () => {
                         </div>
                     </div>
                 )}
-            </div>
+            </div >
         </>
     );
 };

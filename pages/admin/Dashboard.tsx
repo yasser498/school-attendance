@@ -4,7 +4,7 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import {
     FileText, Clock, CheckCircle, Sparkles, Calendar, AlertTriangle, Loader2, BrainCircuit,
-    Search, Settings, Printer, BarChart2, Users, Trash2, ShieldAlert, Send, Megaphone, Activity, LayoutGrid, RefreshCw, Plus, UserCheck, CalendarCheck, Edit, GitCommit, List, Save, AlertCircle, Eye, ArrowRight, Gavel, Check, School, LogOut, MessageSquare, Bell, Upload, BookOpen
+    Search, Settings, Printer, BarChart2, Users, Trash2, ShieldAlert, Send, Megaphone, Activity, LayoutGrid, RefreshCw, Plus, UserCheck, CalendarCheck, Edit, GitCommit, List, Save, AlertCircle, Eye, ArrowRight, Gavel, Check, School, LogOut, MessageSquare, Bell, Upload, BookOpen, Filter, Badge, Info, CheckSquare, XCircle, ArrowUpRight, Inbox
 } from 'lucide-react';
 import {
     getRequests, getStudents, getConsecutiveAbsences, resolveAbsenceAlert, getBehaviorRecords,
@@ -26,6 +26,12 @@ const Dashboard: React.FC = () => {
 
     // Navigation & View State
     const [activeView, setActiveView] = useState<'overview' | 'tracking' | 'behavior' | 'appointments' | 'directives' | 'news' | 'notifications' | 'settings' | 'bento'>('overview');
+
+    // Referral Tracking State
+    const [referralFilter, setReferralFilter] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'returned_to_deputy'>('all');
+    const [referralSearch, setReferralSearch] = useState('');
+    const [isUpdatingReferral, setIsUpdatingReferral] = useState<string | null>(null);
+    const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null);
 
     // Core Data
     const [requests, setRequests] = useState<ExcuseRequest[]>([]);
@@ -51,6 +57,10 @@ const Dashboard: React.FC = () => {
     // Settings & Bot Context
     const [tempSchoolName, setTempSchoolName] = useState(schoolName);
     const [tempSchoolLogo, setTempSchoolLogo] = useState(schoolLogo);
+
+    // WhatsApp Settings State
+    const [whatsAppEnabled, setWhatsAppEnabled] = useState(localStorage.getItem('whatsapp_integration') === 'true');
+
     const [isDeleting, setIsDeleting] = useState(false);
     const [botContext, setBotContext] = useState('');
     const [isSavingContext, setIsSavingContext] = useState(false);
@@ -160,6 +170,7 @@ const Dashboard: React.FC = () => {
     const handleSaveSettings = () => {
         localStorage.setItem('school_name', tempSchoolName);
         localStorage.setItem('school_logo', tempSchoolLogo);
+        localStorage.setItem('whatsapp_integration', whatsAppEnabled ? 'true' : 'false');
         setSchoolName(tempSchoolName);
         setSchoolLogo(tempSchoolLogo);
         alert("تم حفظ الإعدادات بنجاح! سيتم تحديث النظام.");
@@ -373,6 +384,29 @@ const Dashboard: React.FC = () => {
         } catch (e) { alert("حدث خطأ."); } finally { setIsTriggeringSmart(false); }
     };
 
+    const handleAdminUpdateReferral = async (id: string, status: 'pending' | 'in_progress' | 'resolved' | 'returned_to_deputy') => {
+        setIsUpdatingReferral(id);
+        try {
+            await updateReferralStatus(id, status, undefined);
+            fetchData();
+        } catch (e) { alert("فشل التحديث"); } finally { setIsUpdatingReferral(null); }
+    };
+
+    const filteredReferrals = useMemo(() => {
+        return referrals
+            .filter(r => referralFilter === 'all' || r.status === referralFilter)
+            .filter(r => !referralSearch || r.studentName.includes(referralSearch) || r.reason.includes(referralSearch));
+    }, [referrals, referralFilter, referralSearch]);
+
+    const referralStats = useMemo(() => ({
+        pending: referrals.filter(r => r.status === 'pending').length,
+        inProgress: referrals.filter(r => r.status === 'in_progress').length,
+        resolved: referrals.filter(r => r.status === 'resolved').length,
+        returned: referrals.filter(r => r.status === 'returned_to_deputy').length,
+        fromDeputy: referrals.filter(r => r.referredBy === 'deputy').length,
+        fromCounselor: referrals.filter(r => r.referredBy === 'admin').length,
+    }), [referrals]);
+
     // --- RENDERERS ---
     // --- RENDERERS ---
     const StatCard = ({ title, value, icon: Icon, color, bgGradient }: any) => (
@@ -571,6 +605,234 @@ const Dashboard: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* === TRACKING: REFERRALS CENTER === */}
+            {activeView === 'tracking' && (
+                <div className="px-2 space-y-6 animate-fade-in-up">
+                    {/* Header */}
+                    <div className="bg-gradient-to-br from-indigo-900 to-blue-950 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl border border-indigo-700/50 isolate">
+                        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-700/30 via-transparent to-transparent"></div>
+                        <div className="absolute top-0 right-0 -z-10 w-80 h-80 bg-blue-400/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div className="flex items-center gap-5">
+                                <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shadow-inner">
+                                    <GitCommit size={32} className="text-indigo-300" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black">مركز الإحالات</h2>
+                                    <p className="text-indigo-300 text-sm mt-1 font-medium">متابعة الإحالات بين الوكيل والموجه الطلابي</p>
+                                </div>
+                            </div>
+                            {/* Quick Stats */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full md:w-auto">
+                                {[
+                                    { label: 'جديدة', value: referralStats.pending, color: 'bg-amber-400/20 text-amber-300 border-amber-400/30' },
+                                    { label: 'جارٍ', value: referralStats.inProgress, color: 'bg-blue-400/20 text-blue-300 border-blue-400/30' },
+                                    { label: 'مغلقة', value: referralStats.resolved, color: 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30' },
+                                    { label: 'مُرجعة', value: referralStats.returned, color: 'bg-orange-400/20 text-orange-300 border-orange-400/30' },
+                                ].map(s => (
+                                    <div key={s.label} className={`${s.color} border rounded-2xl p-4 text-center backdrop-blur-sm`}>
+                                        <p className="text-3xl font-black">{s.value}</p>
+                                        <p className="text-xs font-bold mt-1 opacity-80">{s.label}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Source Breakdown */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-white p-5 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+                            <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-red-600 border border-red-100 shadow-inner shrink-0">
+                                <ShieldAlert size={26} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">إحالات من الوكيل</p>
+                                <p className="text-4xl font-black text-red-700 mt-1">{referralStats.fromDeputy}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">إحالة مسجلة من وكيل الشؤون</p>
+                            </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+                            <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 border border-purple-100 shadow-inner shrink-0">
+                                <Users size={26} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">إحالات للموجه</p>
+                                <p className="text-4xl font-black text-purple-700 mt-1">{referrals.length}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">إجمالي الإحالات في النظام</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Filter & Search Bar */}
+                    <div className="bg-white p-4 rounded-[2rem] border border-slate-200/60 shadow-sm flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input
+                                value={referralSearch}
+                                onChange={e => setReferralSearch(e.target.value)}
+                                type="text"
+                                placeholder="بحث باسم الطالب أو سبب الإحالة..."
+                                className="w-full pr-11 pl-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl outline-none font-bold text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                            />
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                            {[
+                                { k: 'all', l: 'الكل', count: referrals.length },
+                                { k: 'pending', l: 'جديدة', count: referralStats.pending },
+                                { k: 'in_progress', l: 'جارٍ', count: referralStats.inProgress },
+                                { k: 'resolved', l: 'مغلقة', count: referralStats.resolved },
+                                { k: 'returned_to_deputy', l: 'مُرجعة', count: referralStats.returned },
+                            ].map(f => (
+                                <button
+                                    key={f.k}
+                                    onClick={() => setReferralFilter(f.k as any)}
+                                    className={`px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all border ${referralFilter === f.k
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    {f.l}
+                                    {f.count > 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${referralFilter === f.k ? 'bg-white/20' : 'bg-slate-100'
+                                            }`}>{f.count}</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Referrals List */}
+                    {dataLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 className="animate-spin text-indigo-600" size={32} />
+                        </div>
+                    ) : filteredReferrals.length === 0 ? (
+                        <div className="bg-white rounded-[2.5rem] py-20 flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-200">
+                            <GitCommit size={48} strokeWidth={1} className="mb-4 opacity-40" />
+                            <p className="font-bold text-lg">لا توجد إحالات في هذه الفئة</p>
+                            <p className="text-sm mt-1">ستظهر هنا الإحالات من وكيل الشؤون والموجه الطلابي</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {[...filteredReferrals].sort((a, b) => (b.createdAt || b.referralDate).localeCompare(a.createdAt || a.referralDate)).map(ref => {
+                                const statusConfig: Record<string, { label: string, bg: string, text: string, border: string, dot: string }> = {
+                                    pending: { label: 'جديدة', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
+                                    in_progress: { label: 'جارٍ المعالجة', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+                                    resolved: { label: 'مغلقة ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+                                    returned_to_deputy: { label: 'مُرجعة للوكيل', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+                                };
+                                const cfg = statusConfig[ref.status] || statusConfig.pending;
+                                const isUpdating = isUpdatingReferral === ref.id;
+                                return (
+                                    <div key={ref.id} className={`bg-white rounded-[2rem] border ${cfg.border} shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group`}>
+                                        {/* Colored top bar */}
+                                        <div className={`h-1.5 w-full ${cfg.dot} opacity-70`}></div>
+                                        <div className="p-6">
+                                            {/* Student Header */}
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-2xl ${cfg.bg} flex items-center justify-center font-black text-xl ${cfg.text} border ${cfg.border} shadow-inner`}>
+                                                        {ref.studentName.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-black text-slate-900 text-base group-hover:text-indigo-700 transition-colors">{ref.studentName}</h3>
+                                                        <p className="text-xs text-slate-500 font-medium mt-0.5">{ref.grade} - {ref.className}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-left flex flex-col items-end gap-1.5">
+                                                    <span className={`text-[11px] font-extrabold px-3 py-1.5 rounded-full ${cfg.bg} ${cfg.text} border ${cfg.border}`}>
+                                                        {cfg.label}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400 font-mono">
+                                                        {ref.referredBy === 'deputy' ? '🔴 الوكيل' : ref.referredBy === 'admin' ? '🛡 الإدارة' : '📝 معلم'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Reason */}
+                                            <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 mb-4 relative">
+                                                <span className="absolute -top-2.5 right-4 bg-white px-2 text-[10px] font-extrabold text-slate-400 uppercase border border-slate-200 rounded-full">سبب الإحالة</span>
+                                                <p className="text-sm text-slate-700 leading-relaxed font-medium">{ref.reason}</p>
+                                            </div>
+
+                                            {/* Outcome if exists */}
+                                            {ref.outcome && (
+                                                <div className={`rounded-2xl p-4 mb-4 border ${ref.status === 'resolved' ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
+                                                    <p className={`text-[11px] font-extrabold uppercase mb-2 ${ref.status === 'resolved' ? 'text-emerald-600' : 'text-orange-600'}`}>
+                                                        {ref.status === 'resolved' ? '✅ نتيجة معالجة الموجه' : '↩ ملاحظة الموجه (سبب الإرجاع)'}
+                                                    </p>
+                                                    <p className="text-sm text-slate-700 leading-relaxed">{ref.outcome}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Info Row */}
+                                            <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-4">
+                                                <span>📅 {ref.referralDate}</span>
+                                                <span>معرّف: {ref.id.substring(0, 8)}...</span>
+                                            </div>
+
+                                            {/* Admin Actions */}
+                                            <div className="flex gap-2 flex-wrap">
+                                                {ref.status === 'pending' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleAdminUpdateReferral(ref.id, 'in_progress')}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200 flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />} قيد المعالجة
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAdminUpdateReferral(ref.id, 'resolved')}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-200 flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} إغلاق
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {ref.status === 'in_progress' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleAdminUpdateReferral(ref.id, 'resolved')}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} إغلاق الحالة
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAdminUpdateReferral(ref.id, 'returned_to_deputy')}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 bg-orange-100 text-orange-700 border border-orange-200 py-2.5 rounded-xl text-xs font-bold hover:bg-orange-200 transition-all flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} className="rotate-180" />} إرجاع للوكيل
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {ref.status === 'resolved' && (
+                                                    <div className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-bold">
+                                                        <CheckCircle size={14} /> تمت المعالجة بنجاح
+                                                    </div>
+                                                )}
+                                                {ref.status === 'returned_to_deputy' && (
+                                                    <button
+                                                        onClick={() => handleAdminUpdateReferral(ref.id, 'pending')}
+                                                        disabled={isUpdating}
+                                                        className="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5"
+                                                    >
+                                                        {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} إعادة للمعالجة
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -981,6 +1243,51 @@ const Dashboard: React.FC = () => {
                                 </div>
                                 <button onClick={handleSaveSettings} className="w-full sm:w-[50%] bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:from-blue-500 hover:to-indigo-500 transition-all shadow-xl shadow-blue-600/20 active:scale-[0.98]"><Save size={20} /> حفظ بيانات المؤسسة</button>
                             </div>
+                        </div>
+
+                        {/* WhatsApp Integration Settings */}
+                        <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-green-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+                            <h2 className="text-xl font-extrabold text-green-700 mb-6 flex items-center gap-3">
+                                <div className="bg-green-50 w-12 h-12 rounded-2xl flex items-center justify-center text-green-600 border border-green-100/50 shadow-inner">
+                                    <MessageSquare size={24} />
+                                </div>
+                                ربط واتساب الآلي (WhatsApp Gateway)
+                            </h2>
+                            <p className="text-sm text-slate-500 mb-8 max-w-2xl leading-relaxed">عند تفعيل الميزة، سيقوم النظام تلقائياً بإرسال رسائل نصية عبر واتساب لأرقام أولياء الأمور المسجلة عند اعتماد الأعذار، رصد الغياب، تسجيل مخالفات سلوكية، أو صدور الإحالات والتصاريح دون الحاجة لاستخدام جوال المدرسة اليدوي.</p>
+
+                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200/60 hover:border-green-300 transition-colors cursor-pointer group" onClick={() => {
+                                setWhatsAppEnabled(!whatsAppEnabled);
+                                localStorage.setItem('whatsapp_integration', (!whatsAppEnabled) ? 'true' : 'false');
+                            }}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${whatsAppEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-400 group-hover:bg-slate-300'}`}>
+                                        <MessageSquare size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800">تفعيل إرسال إشعارات الواتساب تلقائياً</p>
+                                        <p className="text-xs text-slate-500 mt-1">يتطلب اشتراك نشط في منفذ الواتساب السحابي</p>
+                                    </div>
+                                </div>
+                                {/* Toggle Switch UI */}
+                                <div className={`w-14 h-7 flex items-center rounded-full p-1 cursor-pointer transition-colors ${whatsAppEnabled ? 'bg-green-500' : 'bg-slate-300'}`}>
+                                    <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform ${whatsAppEnabled ? 'translate-x-[-28px]' : 'translate-x-[0px]'}`}></div>
+                                </div>
+                            </div>
+
+                            {whatsAppEnabled && (
+                                <div className="mt-6 p-5 bg-green-50 border border-green-200 rounded-2xl animate-fade-in space-y-4">
+                                    <div className="flex items-start gap-3">
+                                        <CheckCircle size={20} className="text-green-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="font-bold text-green-800 text-sm">الخدمة مفعلة وجاهزة للإرسال!</p>
+                                            <p className="text-xs text-green-700 mt-1 leading-relaxed">الطلبات المعتمدة، ملاحظات بوابة الخروج، وحالات السلوكية ستقوم بتفعيل رسائل واتساب خلفية إلى أرقام الجوال الموجودة في ملفات الطلاب.</p>
+                                        </div>
+                                    </div>
+                                    <button className="text-sm font-bold bg-white text-green-700 px-4 py-2 rounded-xl border border-green-200 hover:bg-green-100 transition-colors shadow-sm">
+                                        فحص وتجربة الإرسال
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Bot Knowledge Base */}

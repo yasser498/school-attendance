@@ -28,6 +28,7 @@ export interface ExcuseRequest {
   status: RequestStatus;
   adminReply?: string; // New field for admin's AI or manual reply
   closedAt?: string;   // New field for workflow closure timestamp
+  createdAt?: string;  // Explicit timestamp from DB
 }
 
 export interface DashboardStats {
@@ -232,4 +233,70 @@ export interface ExitPermission {
   adminReply?: string; // Reason for rejection
   createdAt: string;
   completedAt?: string;
+}
+
+export interface ClinicVisit {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  date: string;
+  symptoms: string;
+  actionTaken: string;
+  sentHome: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Certificate {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  month: string;
+  type: 'attendance' | 'excellence';
+  createdAt: string;
+}
+
+export interface ActivityPermission {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  targetGrades: string[];
+  targetClasses: string[];
+  cost?: number;
+  maxParticipants?: number;
+  status: 'active' | 'completed' | 'cancelled';
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ActivityApproval {
+  id: string;
+  activityId: string;
+  studentId: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  status: 'approved' | 'rejected' | 'pending';
+  parentCivilId: string;
+  updatedAt: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  studentId: string;
+  type: 'recharge' | 'purchase';
+  amount: number;
+  description: string;
+  timestamp: string;
+  createdBy: string;
+}
+
+export interface StudentWallet {
+  studentId: string;
+  balance: number;
 }

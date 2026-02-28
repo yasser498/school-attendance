@@ -25,7 +25,7 @@ const Dashboard: React.FC = () => {
     const navigate = useNavigate();
 
     // Navigation & View State
-    const [activeView, setActiveView] = useState<'overview' | 'tracking' | 'behavior' | 'appointments' | 'directives' | 'news' | 'notifications' | 'settings'>('overview');
+    const [activeView, setActiveView] = useState<'overview' | 'tracking' | 'behavior' | 'appointments' | 'directives' | 'news' | 'notifications' | 'settings' | 'bento'>('overview');
 
     // Core Data
     const [requests, setRequests] = useState<ExcuseRequest[]>([]);
@@ -420,6 +420,7 @@ const Dashboard: React.FC = () => {
             <div className="px-2 flex overflow-x-auto pb-4 gap-3 scrollbar-hide snap-x">
                 {[
                     { id: 'overview', label: 'المتابعة اليومية', icon: Activity, color: 'blue' },
+                    { id: 'bento', label: 'الرؤية البصرية', icon: LayoutGrid, color: 'violet' },
                     { id: 'tracking', label: 'الإحالات', icon: GitCommit, color: 'indigo' },
                     { id: 'appointments', label: 'المواعيد والأمن', icon: CalendarCheck, color: 'teal' },
                     { id: 'directives', label: 'التوجيهات', icon: Megaphone, color: 'purple' },
@@ -568,6 +569,79 @@ const Dashboard: React.FC = () => {
                                         </div>
                                     ))}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* === BENTO BOX VISUAL DASHBOARD === */}
+            {activeView === 'bento' && (
+                <div className="px-2 animate-fade-in-up">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Big hero card */}
+                        <div className="col-span-2 row-span-2 bg-gradient-to-br from-[#0f172a] to-indigo-950 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl border border-white/5 flex flex-col justify-between hover:scale-[1.01] transition-transform">
+                            <div className="absolute -top-10 -right-10 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                            <div className="relative z-10">
+                                <p className="text-[11px] font-extrabold text-indigo-300 uppercase tracking-widest mb-2">نبضة الحضور اليوم</p>
+                                <div className="flex items-end gap-4">
+                                    <p className="text-8xl font-black text-white leading-none">{stats.present}</p>
+                                    <div className="mb-3"><p className="text-indigo-200 font-bold text-xl">طالب حاضر</p><p className="text-slate-400 text-sm">من أصل {stats.present + stats.absent + stats.late}</p></div>
+                                </div>
+                            </div>
+                            <div className="relative z-10 grid grid-cols-3 gap-3 mt-4">
+                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"><p className="text-3xl font-black text-emerald-400">{stats.present}</p><p className="text-[11px] text-slate-400 mt-1 font-bold">حاضر</p></div>
+                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"><p className="text-3xl font-black text-rose-400">{stats.absent}</p><p className="text-[11px] text-slate-400 mt-1 font-bold">غائب</p></div>
+                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"><p className="text-3xl font-black text-amber-400">{stats.late}</p><p className="text-[11px] text-slate-400 mt-1 font-bold">متأخر</p></div>
+                            </div>
+                        </div>
+                        {/* Violations */}
+                        <div className="bg-gradient-to-br from-rose-500 to-orange-500 rounded-[2rem] p-6 text-white shadow-xl hover:scale-[1.02] transition-transform">
+                            <ShieldAlert size={28} className="mb-4 opacity-80" />
+                            <p className="text-5xl font-black">{stats.todayViolations}</p>
+                            <p className="text-sm font-bold text-rose-100 mt-1">مخالفات اليوم</p>
+                        </div>
+                        {/* Exits */}
+                        <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-[2rem] p-6 text-white shadow-xl hover:scale-[1.02] transition-transform">
+                            <LogOut size={28} className="mb-4 opacity-80" />
+                            <p className="text-5xl font-black">{stats.todayExits}</p>
+                            <p className="text-sm font-bold text-amber-100 mt-1">استئذانات اليوم</p>
+                        </div>
+                        {/* Risk meter */}
+                        <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-xl hover:scale-[1.02] transition-transform">
+                            <div className="flex items-center gap-2 mb-3"><div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center"><AlertTriangle size={18} className="text-red-500" /></div><p className="text-slate-400 text-xs font-extrabold uppercase tracking-wider">مؤشر الخطر</p></div>
+                            <p className={`text-5xl font-black ${alerts.length > 10 ? 'text-red-600' : alerts.length > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>{alerts.length}</p>
+                            <p className="text-xs font-bold text-slate-400 mt-1">طالب في دائرة الخطر</p>
+                            <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div className={`h-full rounded-full transition-all ${alerts.length > 10 ? 'bg-red-500' : alerts.length > 5 ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${Math.min((alerts.length / 20) * 100, 100)}%` }}></div></div>
+                        </div>
+                        {/* Requests */}
+                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] p-6 text-white shadow-xl hover:scale-[1.02] transition-transform">
+                            <MessageSquare size={28} className="mb-4 opacity-80" />
+                            <p className="text-5xl font-black">{stats.pending}</p>
+                            <p className="text-sm font-bold text-indigo-200 mt-1">طلب معلق</p>
+                        </div>
+                        {/* Chart */}
+                        <div className="col-span-2 bg-white rounded-[2rem] p-6 border border-slate-100 shadow-xl">
+                            <p className="text-sm font-extrabold text-slate-600 mb-4 flex items-center gap-2"><BarChart2 size={18} className="text-purple-500" /> منحنى المخالفات (آخر 7 أيام)</p>
+                            <ResponsiveContainer width="100%" height={110}>
+                                <AreaChart data={Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); const ds = d.toISOString().split('T')[0]; return { day: d.toLocaleDateString('ar', { weekday: 'short' }), count: behaviorRecords.filter(r => r.date === ds).length }; })}>
+                                    <defs><linearGradient id="violGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} /><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs>
+                                    <XAxis dataKey="day" tick={{ fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                                    <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }} />
+                                    <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#violGrad)" dot={{ fill: '#8b5cf6', r: 4 }} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {/* Visitors */}
+                        <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-[2rem] p-6 text-white shadow-xl hover:scale-[1.02] transition-transform">
+                            <Users size={28} className="mb-4 opacity-80" />
+                            <p className="text-5xl font-black">{stats.todayVisits}</p>
+                            <p className="text-sm font-bold text-teal-100 mt-1">زوار استقبلناهم</p>
+                        </div>
+                        {/* Students */}
+                        <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-xl hover:scale-[1.02] transition-transform">
+                            <div className="flex items-center gap-2 mb-3"><div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center"><School size={18} className="text-blue-500" /></div><p className="text-slate-400 text-xs font-extrabold uppercase tracking-wider">إجمالي طلاب</p></div>
+                            <p className="text-5xl font-black text-blue-600">{stats.studentsCount}</p>
+                            <p className="text-xs font-bold text-slate-400 mt-1">طالب مسجل في النظام</p>
                         </div>
                     </div>
                 </div>

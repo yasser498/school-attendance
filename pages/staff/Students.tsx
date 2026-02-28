@@ -67,7 +67,8 @@ const StaffStudents: React.FC = () => {
     }>({ history: [], behavior: [], observations: [] });
     // Student Detail Modal State
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-    const [modalTab, setModalTab] = useState<'info' | 'history' | 'behavior' | 'sessions'>('info');
+    const [modalTab, setModalTab] = useState<'info' | 'history' | 'behavior' | 'sessions' | 'card' | 'timeline'>('info');
+    const [cardFlipped, setCardFlipped] = useState(false);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
     // Session Form State
@@ -557,8 +558,8 @@ const StaffStudents: React.FC = () => {
 
                         {/* Tabs */}
                         <div className="flex border-b border-slate-100 bg-slate-50 px-6 gap-2 overflow-x-auto">
-                            {[{ k: 'info', l: 'الملف الشخصي', i: User }, { k: 'history', l: 'سجل الغياب', i: Clock }, { k: 'behavior', l: 'السلوك', i: ShieldAlert }, { k: 'sessions', l: 'جلسات الإرشاد', i: MessageSquare }].map(t => (
-                                <button key={t.k} onClick={() => setModalTab(t.k as any)} className={`py-4 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${modalTab === t.k ? 'border-purple-600 text-purple-700 bg-purple-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+                            {[{ k: 'info', l: 'الملف الشخصي', i: User }, { k: 'history', l: 'سجل الغياب', i: Clock }, { k: 'behavior', l: 'السلوك', i: ShieldAlert }, { k: 'sessions', l: 'جلسات الإرشاد', i: MessageSquare }, { k: 'card', l: 'البطاقة الرقمية', i: QrCode }, { k: 'timeline', l: 'خط الزمن', i: Activity }].map(t => (
+                                <button key={t.k} onClick={() => setModalTab(t.k as any)} className={`py-4 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${modalTab === t.k ? 'border-purple-600 text-purple-700 bg-purple-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
                                     <t.i size={16} /> {t.l}
                                 </button>
                             ))}
@@ -713,6 +714,104 @@ const StaffStudents: React.FC = () => {
                                 </div>
                             )
                             }
+
+                            {/* IDEA 9: DIGITAL ID CARD */}
+                            {!loadingDetails && modalTab === 'card' && (
+                                <div className="animate-fade-in flex flex-col items-center justify-center py-8 gap-6">
+                                    <p className="text-sm text-slate-400 font-bold">انقر على البطاقة لقلبها</p>
+                                    <div className="cursor-pointer" style={{ perspective: '1200px', width: '360px', height: '220px' }} onClick={() => setCardFlipped(f => !f)}>
+                                        <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', transition: 'transform 0.7s cubic-bezier(0.645, 0.045, 0.355, 1)', transform: cardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
+                                            <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', borderRadius: '1.5rem', overflow: 'hidden' }} className="bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 shadow-2xl border border-white/10 flex flex-col justify-between p-6">
+                                                <div className="absolute bottom-0 right-0 w-48 h-48 bg-purple-500/30 rounded-full blur-3xl -mb-16 -mr-16"></div>
+                                                <div className="relative z-10 flex justify-between items-start">
+                                                    <div><p className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-widest">البطاقة المدرسية الرقمية</p></div>
+                                                    <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white font-black text-lg border border-white/20">{selectedStudent.name.charAt(0)}</div>
+                                                </div>
+                                                <div className="relative z-10">
+                                                    <p className="text-white text-xl font-black tracking-tight">{selectedStudent.name}</p>
+                                                    <div className="flex items-center gap-3 mt-2">
+                                                        <span className="text-xs text-indigo-300 font-bold flex items-center gap-1"><School size={11} /> {selectedStudent.grade} - {selectedStudent.className}</span>
+                                                        <span className="text-xs text-slate-400 font-mono">{selectedStudent.studentId}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="relative z-10 flex justify-between items-end">
+                                                    <div><p className="text-[9px] text-slate-500 uppercase font-bold">رقم التواصل</p><p className="text-white font-mono text-sm font-bold">{selectedStudent.phone || '---'}</p></div>
+                                                    <span className={`text-xs font-black px-2 py-0.5 rounded-full ${studentDetails.history.filter(h => h.status === 'ABSENT').length > 5 ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/30 text-emerald-300'}`}>{studentDetails.history.filter(h => h.status === 'ABSENT').length > 5 ? '⚠ يحتاج متابعة' : '✓ منتظم'}</span>
+                                                </div>
+                                            </div>
+                                            <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', borderRadius: '1.5rem', overflow: 'hidden', transform: 'rotateY(180deg)' }} className="bg-gradient-to-br from-white to-indigo-50 shadow-2xl border border-indigo-100 flex items-center justify-center gap-8 p-6">
+                                                <div className="text-center flex-1">
+                                                    <p className="text-xs font-extrabold text-slate-400 mb-3 uppercase tracking-wider">QR تواصل</p>
+                                                    <div className="bg-white rounded-2xl p-3 shadow-md inline-block border border-slate-100">
+                                                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=tel:${selectedStudent.phone?.replace(/^0/, '+966')}&color=1e1b4b&bgcolor=ffffff`} alt="QR" className="w-28 h-28" />
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 mt-2 font-mono">{selectedStudent.phone}</p>
+                                                </div>
+                                                <div className="flex-1 space-y-3 border-r border-dashed border-indigo-200 pr-6">
+                                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">الغياب</p><p className="text-2xl font-black text-red-600">{studentDetails.history.filter(h => h.status === 'ABSENT').length}<span className="text-xs text-slate-400 mr-1">يوم</span></p></div>
+                                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">الجلسات</p><p className="text-2xl font-black text-purple-600">{sessions.filter(s => s.studentId === selectedStudent.studentId).length}<span className="text-xs text-slate-400 mr-1">جلسة</span></p></div>
+                                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">المخالفات</p><p className="text-2xl font-black text-orange-600">{studentDetails.behavior.length}<span className="text-xs text-slate-400 mr-1">مخالفة</span></p></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-indigo-400 font-bold animate-pulse">↻ انقر للقلب ورؤية الرصيد</p>
+                                    <div className="flex gap-3">
+                                        <a href={`tel:${selectedStudent.phone}`} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-all hover:-translate-y-1 text-sm"><Phone size={16} /> اتصال</a>
+                                        <button onClick={() => openWhatsApp(selectedStudent.phone)} className="bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg hover:bg-emerald-700 transition-all hover:-translate-y-1 text-sm"><MessageCircle size={16} /> واتساب</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* IDEA 10: TIME MACHINE TIMELINE */}
+                            {!loadingDetails && modalTab === 'timeline' && (
+                                <div className="animate-fade-in space-y-4">
+                                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-100 text-center">
+                                        <p className="text-xs text-slate-500 font-bold">آلة الزمن — السجل الكامل لمسيرة <span className="text-indigo-600 font-black">{selectedStudent.name}</span></p>
+                                    </div>
+                                    {(() => {
+                                        const evts: { date: string, type: 'absent' | 'late' | 'behavior' | 'session' | 'observation', title: string, detail: string }[] = [];
+                                        studentDetails.history.forEach(h => {
+                                            if (h.status === 'ABSENT') evts.push({ date: h.date, type: 'absent', title: 'يوم غياب', detail: 'لم يحضر الطالب هذا اليوم' });
+                                            if (h.status === 'LATE') evts.push({ date: h.date, type: 'late', title: 'تأخر عن الدراسة', detail: 'حضر الطالب متأخراً' });
+                                        });
+                                        studentDetails.behavior.forEach(b => evts.push({ date: b.date, type: 'behavior', title: b.violationName, detail: b.actionTaken }));
+                                        sessions.filter(s => s.studentId === selectedStudent.studentId).forEach(s => evts.push({ date: s.date, type: 'session', title: `جلسة: ${s.topic}`, detail: s.recommendations }));
+                                        studentDetails.observations.forEach(o => evts.push({ date: o.date, type: 'observation', title: o.content.substring(0, 50), detail: `بقلم: ${o.staffName}` }));
+                                        evts.sort((a, b) => b.date.localeCompare(a.date));
+                                        if (evts.length === 0) return (<div className="py-20 text-center text-slate-400"><Activity size={48} className="mx-auto mb-3 opacity-30" /><p className="font-bold">لا توجد أحداث مسجلة لهذا الطالب بعد</p></div>);
+                                        const cMap: Record<string, { bg: string, border: string, dot: string, text: string, icon: string }> = {
+                                            absent: { bg: 'bg-red-50', border: 'border-red-200', dot: 'bg-red-500', text: 'text-red-700', icon: '🔴' },
+                                            late: { bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-400', text: 'text-amber-700', icon: '🟡' },
+                                            behavior: { bg: 'bg-orange-50', border: 'border-orange-200', dot: 'bg-orange-500', text: 'text-orange-700', icon: '⚠️' },
+                                            session: { bg: 'bg-purple-50', border: 'border-purple-200', dot: 'bg-purple-500', text: 'text-purple-700', icon: '💬' },
+                                            observation: { bg: 'bg-blue-50', border: 'border-blue-200', dot: 'bg-blue-400', text: 'text-blue-700', icon: '📝' }
+                                        };
+                                        return (
+                                            <div className="relative pr-8 space-y-3 max-h-[55vh] overflow-y-auto custom-scrollbar pl-1 pb-4">
+                                                <div className="absolute right-3 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-300 via-slate-200 to-transparent rounded-full"></div>
+                                                {evts.map((ev, idx) => {
+                                                    const c = cMap[ev.type];
+                                                    return (
+                                                        <div key={idx} className="relative flex items-start group">
+                                                            <div className={`absolute -right-[24px] mt-2 w-4 h-4 rounded-full ${c.dot} border-2 border-white shadow-md shrink-0 group-hover:scale-125 transition-transform z-10`}></div>
+                                                            <div className={`${c.bg} border ${c.border} rounded-2xl p-4 flex-1 hover:shadow-md transition-all`}>
+                                                                <div className="flex justify-between items-start gap-2">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className={`text-sm font-extrabold ${c.text}`}><span className="ml-1">{c.icon}</span>{ev.title}</p>
+                                                                        <p className="text-xs text-slate-500 mt-1">{ev.detail}</p>
+                                                                    </div>
+                                                                    <span className="text-[10px] font-mono font-bold text-slate-400 bg-white/70 px-2 py-1 rounded-lg border border-slate-100 shrink-0">{ev.date}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

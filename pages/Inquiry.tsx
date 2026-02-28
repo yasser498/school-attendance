@@ -12,12 +12,12 @@ import {
     acknowledgeObservation, getParentChildren, linkParentToStudent,
     getNotifications, markNotificationRead, getStudentPoints, getSchoolNews, generateSmartStudentReport,
     getAvailableSlots, bookAppointment, getMyAppointments, getMyExitPermissions, getStudentsByPhone,
-    checkParentRegistration, addExitPermission, getCertificates, getActivities, getActivityApprovals, updateActivityApproval, getStudentWallet
+    checkParentRegistration, addExitPermission, getCertificates, getActivities, getActivityApprovals, updateActivityApproval, getStudentWallet, getWalletTransactions
 } from '../services/storage';
 import { subscribeToPushNotifications, checkPushPermission } from '../services/pushService';
 import {
     Student, ExcuseRequest, RequestStatus, AttendanceStatus, BehaviorRecord,
-    StudentObservation, AppNotification, StudentPoint, SchoolNews, AppointmentSlot, Appointment, ExitPermission, Certificate, ActivityPermission, ActivityApproval
+    StudentObservation, AppNotification, StudentPoint, SchoolNews, AppointmentSlot, Appointment, ExitPermission, Certificate, ActivityPermission, ActivityApproval, WalletTransaction
 } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -60,6 +60,7 @@ const Inquiry: React.FC = () => {
     const [activities, setActivities] = useState<ActivityPermission[]>([]);
     const [approvals, setApprovals] = useState<ActivityApproval[]>([]);
     const [walletBalance, setWalletBalance] = useState<number>(0);
+    const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
     const [loading, setLoading] = useState(false);
     const [newChildInput, setNewChildInput] = useState('');
     const [isAddingChild, setIsAddingChild] = useState(false);
@@ -242,7 +243,7 @@ const Inquiry: React.FC = () => {
         setLoading(true);
         try {
             // Fetch ALL necessary data for tabs
-            const [reqs, att, beh, allObs, pts, slots, apps, exits, allCerts, allActs, allApprovals, walletAmount] = await Promise.all([
+            const [reqs, att, beh, allObs, pts, slots, apps, exits, allCerts, allActs, allApprovals, walletAmount, txs] = await Promise.all([
                 getRequestsByStudentId(student.studentId),
                 getStudentAttendanceHistory(student.studentId),
                 getBehaviorRecords(student.studentId),
@@ -254,7 +255,8 @@ const Inquiry: React.FC = () => {
                 getCertificates(),
                 getActivities(),
                 getActivityApprovals(),
-                getStudentWallet(student.studentId)
+                getStudentWallet(student.studentId),
+                getWalletTransactions(student.studentId)
             ]);
 
             setHistory(reqs);
@@ -274,6 +276,7 @@ const Inquiry: React.FC = () => {
             setActivities(filteredActs);
             setApprovals(allApprovals.filter(a => a.studentId === student.studentId));
             setWalletBalance(walletAmount);
+            setWalletTransactions(txs);
 
             setActiveTab('overview');
             setSmartReport(null);
@@ -1023,15 +1026,53 @@ const Inquiry: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 <div className="mt-8 pt-6 border-t border-white/20 flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm font-bold text-orange-50 gap-4">
-                                                    <p className="flex items-center gap-2"><Sparkles size={16} /> يستخدم الرصيد إلكترونياً عند الشراء عبر المقصف (بدون استخدام النقود)</p>
+                                                    <p className="flex items-center gap-2"><Sparkles size={16} /> يستخدم الرصيد إلكترونياً عند الشراء عبر المقصف</p>
                                                     <p className="bg-orange-600/50 px-4 py-2 rounded-xl backdrop-blur-sm border border-orange-400 font-mono">ID: {selectedStudent.studentId}</p>
                                                 </div>
                                             </div>
 
-                                            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center shadow-sm">
-                                                <QrCode size={80} className="mx-auto text-slate-300 mb-4" />
-                                                <h3 className="font-extrabold text-slate-800 text-xl mb-2">إبراز الهوية للشراء</h3>
-                                                <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">دع الطالب يبرز "الهوية الرقمية" الخاصة به عند مقصف المدرسة ليتم مسح الباركود والخصم من المحفظة الرقمية بكل سهولة. يمكنك متابعة حركات الشراء لاحقاً.</p>
+                                            {/* Recent Transactions List */}
+                                            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                                                <div className="p-5 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 text-sm flex items-center justify-between">
+                                                    <span className="flex items-center gap-2"><Clock size={16} className="text-slate-400" /> سجل العمليات الأخيره</span>
+                                                    <span className="text-xs text-slate-400">{walletTransactions.length} عملية</span>
+                                                </div>
+
+                                                <div className="divide-y divide-slate-50">
+                                                    {walletTransactions.length === 0 ? (
+                                                        <div className="p-12 text-center text-slate-400">
+                                                            <AlertCircle size={40} className="mx-auto mb-3 opacity-20" />
+                                                            <p className="text-sm">لا توجد حركات شراء أو شحن مسجلة حالياً.</p>
+                                                        </div>
+                                                    ) : (
+                                                        walletTransactions.map(tx => (
+                                                            <div key={tx.id} className="p-5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'recharge' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                                                        {tx.type === 'recharge' ? <Zap size={18} /> : <CreditCard size={18} />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-slate-800 text-sm">{tx.description || (tx.type === 'recharge' ? 'شحن رصيد' : 'عملية شراء')}</p>
+                                                                        <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                                                                            {new Date(tx.timestamp).toLocaleDateString('ar-SA')}
+                                                                            <span className="opacity-30">•</span>
+                                                                            {new Date(tx.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`text-sm font-black ${tx.type === 'recharge' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                    {tx.type === 'recharge' ? '+' : '-'}{tx.amount} <span className="text-[10px] mr-0.5">ر.س</span>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-slate-50 rounded-3xl border border-dashed border-slate-200 p-8 text-center">
+                                                <QrCode size={40} className="mx-auto text-slate-300 mb-3" />
+                                                <h3 className="font-bold text-slate-700 text-base mb-1 tracking-tight">الدفع المباشر</h3>
+                                                <p className="text-slate-400 text-xs font-medium max-w-xs mx-auto leading-relaxed">يرجى إبراز الهوية الرقمية للطالب عند نقطة البيع لبرمجة عملية الشراء.</p>
                                             </div>
                                         </div>
                                     )}
